@@ -4,4 +4,4 @@
  * 换主视觉后重跑脚本，否则模糊底色会和新画面对不上。
  */
 export const HERO_BG_LQIP =
-  'data:image/webp;base64,UklGRkwAAABXRUJQVlA4IEAAAADQAwCdASoYABAAPxl0slEspqSisAgBkCMJZwAAW/AxJtIVMRUBjUAA/u6PQ1rq79fbfhnRYwUvx6ntVn+EAAAA'
+  'data:image/webp;base64,UklGRkQAAABXRUJQVlA4IDgAAABQAwCdASoYABAAPxl0slCspqSisAgBkCMJaQAAidppygZa8AD+7tXix507+teqVvhsTha9kY4AAA=='
