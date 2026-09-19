@@ -1,0 +1,8 @@
+const u = (process.argv[2] || 'http://127.0.0.1:4188/').replace(/\/$/, '')
+const r = await fetch(u + '/src/config/skin.js')
+const t = await r.text()
+console.log('status', r.status, 'len', t.length)
+const m = t.match(/orb[^;]{0,80}/g)
+console.log('orb 相关片段:', m ? m.slice(0, 4) : '未找到')
+console.log('--- 末尾 400 字符 ---')
+console.log(t.slice(-400))

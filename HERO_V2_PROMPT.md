@@ -3,15 +3,17 @@
 > 这份文件是 v2 的**唯一一张图**的规格书。出图前先读第 1 节（它决定了构图为什么必须往中央挤），
 > 第 3 节是可以直接粘贴的提示词，第 5 节是出图后的处理与验收。
 >
-> 状态：**已定稿 · 待出图**（2026-09-19 第七轮六问全部拍板，见第 6 节；出图 1 张 / 约 5–10 积分，红线已确认）
+> 状态：**已定稿 · 待出第 2 版**（2026-09-19 第八轮：用户拿自己的参考图否掉了第 1 版，
+> 见第 8 节的构图差量分析；球径由 31% 改为 40%，出图预算仍是 1 张 / 5–10 积分）
 
 ---
 
 ## 0 · 这张图要交出什么
 
 - 女巫**肩部以上特写**：帽檐压得很低，**脸几乎完全在帽檐阴影里**（眼睛不可见）
-- **单手**（另一只手必须从画面里彻底消失），放大到球前，环住球的下缘
+- **单手**（另一只手必须从画面里彻底消失），放大到球前，从下方托住球的下缘
 - 画面中央**留一块空位**给 3D 水晶球 —— **不画球**
+- **画面必须有倾斜的对角线，不许左右对称**（第 1 版最大的毛病，见 8.1）
 - 画风 / 笔触 / 色调 / 光感与 v1 完全一致（用 v1 母版做 image-to-image）
 - 卡牌、牌面、牌背**一律不动**
 
@@ -57,19 +59,23 @@ aspect-ratio: 3 / 2
 > **2026-09-19 修正**：这里原本写的是 x ∈ [33%, 67%]。用 `assets/_debug/preview_hero_v2.py`
 > 按 CSS 数学实测量 390×844 得可见窗口 x[35.2%, 64.8%] —— **安全盒是 [35%, 65%]，比原估窄**。
 > 另外要记住一条容易漏的：**宽扁屏的可见窗口下缘只到 y≈75.7%**（1564×708 实测 y[10.4%, 75.7%]），
-> 所以「想被看见的东西」**下面那条线是 y≈76%，不是 100%**。第 2 节里手的高度就是栽在这里（见 5.4）。
+> 所以「想被看见的东西」**下面那条线是 y≈76%，不是 100%**。
 
 ### 1.2 揭晓态的实测（`assets/_debug/probe-panel-orb.js`，1564×708）
 
 | 元素 | 实测 rect | 结论 |
 |---|---|---|
-| 球 | 336×336 @ x614..950 / y386..722 | 下缘**超出视口 14px**（宽扁屏上球的下缘本来就会被裁） |
+| 球（31% 时） | 336×336 @ x614..950 / y386..722 | 下缘**超出视口 14px** |
 | 卡牌 | 223×326 @ y110..435 | 底边 = 视口 61.5% |
 | 面板 | 1564×233 @ y475..708 | 顶端是**渐变**：透明 → 26% 处 0.82 → 底部 0.97 |
-| 球心 | 视口 78.2% 高 | 面板顶在 67.1% → **球有 73.5% 落在面板之下**，面板文字正好压在球心上 |
+| 球心 | 视口 78.2% 高 | 面板顶在 67.1% → 球有约 73.5% 落在面板之下 |
 
-所以「球是网页中心」这件事**只完整成立于待抽态**（也是首次访客看到的那一屏）；
-抽完之后球的可见部分只有上缘约 44%（因为面板顶端是透明渐变，不是硬盖）。
+所以「球是网页中心」这件事**只完整成立于待抽态**（也是首次访客看到的那一屏）。
+
+> **2026-09-19 第八轮 · 球径改 40% 后的推算**（尚未实测，出图装皮肤后必须复测）：
+> 球 40% × 1084 = 434px 直径，球心仍在 (50%, 61.5%) → 视口 y 337..771，
+> 卡牌底边 272.6px → **球顶到卡牌还有 64px 净空**（31% 时是 113px，仍安全）；
+> 球与面板的重叠从 73.5% 升到约 67%（视觉结论不变，面板依然吃掉球的下半）。
 
 ---
 
@@ -78,28 +84,42 @@ aspect-ratio: 3 / 2
 | 元素 | 规格 | 理由 |
 |---|---|---|
 | 画布 | 3:2（1536×1024） | `HERO_FRAME`；所有拆层素材必须同帧 |
+| **构图性格** | **镜头略低、略微仰视；画面有倾斜感；帽檐切出一条从左下到右上的强对角线** | 第 1 版正视平视、左右对称 = 「证件照感」的根源（8.1） |
 | 帽尖 | 允许被上缘裁掉 | y<12% 在宽扁屏上不可见，本来也看不到 |
-| **帽檐** | 横向可**主动溢出**到 x 30%–70% 之外 | 手机上会被裁 —— 这是「近距离特写」的效果，不是意外 |
-| **脸** | y ≈ 24–34%，**必须落在 x ∈ [33%, 67%]** | 五官是必须看见的部分 |
-| 肩 / 袍 | y 34–46%，横向可溢出 | 溢出部分是「随设备被裁的余量」 |
-| **球位空区** | 圆心 **(50%, 61%)**、直径 **≥46%（画布高）** | 46% 是目标球径（31%）的 1.5 倍 → 球在空区里有 **±7% 的平移自由度** |
-| 空区内 | 只允许稀薄暗雾 | **不许画任何球体 / 光球 / 球状光晕**（AI 的本能就是补一颗球）；**也不许画朝中央的辉光**——3D 球是自身发光的实心体，空区里画了辉光也会被它压住，纯属白画 |
-| **手** | 从画面下缘伸入，指尖最高到 **y ≈ 68%**，手腕在 y≥80% 处被下缘裁掉 | 指尖 ≤y70% 有两个硬理由：① 只覆盖球体**下部约 20% 高度**（= 面积遮挡 ≈15%，这是用户定的上限）② 卡牌底边在画布 y≈50.5%，手不得越线 |
-| 手的位置 | **左手**（从左下伸入），整只手落在 **x ∈ [33%, 67%] 内** | 否则手机上只剩一根手指。左手 → 左下入画 → 指向中央球心的一条斜线 |
-| 主光 | **左上前方**（冷月光） | 帽檐因此在脸上投影 —— 这就是「脸被阴影盖住」的物理来源，不是画上去的一块黑 |
+| **帽檐** | 左前缘压在 y 30%–40%；右端**大幅溢出**画面右缘并抬升到 y 8%–22%；左右**不许对称** | 手机上会被裁 —— 这是「近距离特写」的效果，不是意外 |
+| **脸** | y ≈ 20–34%、**x ∈ [52%, 62%]**（略偏右），一团近黑，只留下颌/唇极弱轮廓 | 五官是必须看见的部分，且要落在手机安全盒内 |
+| 头发 | 从帽檐下垂到 y≈48%，x 40–70% | |
+| 肩 / 袍 | y 34–100%，横向可溢出；**通体接近纯黑剪影** | 见 8.2：低对比的第二个来源 |
+| **球位空区** | 圆心 **(50%, 61.5%)**、直径 **≥52%（画面高）**，即 ≥532px | 球径 40% 的 1.3 倍 → 球在空区里有 **±6% 的平移自由度** |
+| 空区内 | 只允许稀薄暗雾；**不许画任何球体 / 光球 / 球状光晕**、**不许画朝中央的辉光**。**唯一例外：下面的那只手** | 3D 球是自身发光的实心体；空区里画了球或辉光都是白画（见 2.1） |
+| **手** | 掌心在空区正下方（y>88%，被下缘裁掉）；四指沿空区下弧向上包覆，**指尖最高 y ≈ 72%**；拇指在左（x 36–42%）；整只手 x ∈ [36%, 64%] | ① 只覆盖球体**下部约 15% 面积**（用户定的上限）② 指尖 y72% 在宽屏可见带（≤75.7%）之内，桌面才看得见 ③ x≥36% 手机上才不会被裁光 |
+| 手的光 | 手指外缘一道冷色高光，**指甲长而清晰** | 这是全画面最亮的三个细节之一 |
+| 主光 | **左上前方**（冷月光） | 帽檐因此在脸上投影 —— 这是「脸被阴影盖住」的物理来源 |
+| 三处最亮 | ① 帽檐上缘细边光 ② 左肩线细边光 ③ 手指外缘高光 | 明暗对比的来源，**画面其余部分锁死为暗** |
+| 背景 | **纯暗紫夜雾**（用户第八轮拍板：不要星云 / 行星 / 碎石 / 天体结构）；只在头部后方有一层比四角略亮的雾把帽檐剪影托出来，向四角淡出到近黑 | 又有对比、又不抢视线 |
 
-### 为什么空区要「比球大」而不是「正好」
+### 2.1 两个已经踩过的坑
 
-空区 46% vs 球 31% → 球心可以在空区里平移 ±7.5%（画布高）。
-这意味着**新图把空区画偏一点，锚点也不用改**；也意味着你选的「图上说了算」不会立刻牵动
-`ANCHORS.orb` / `CARD_RISE` / 卡牌面板契约 —— 这三样一动就是功能改动。
+**① 空区要「比球大」而不是「正好」**：空区 52% vs 球 40% → 球心可在空区里平移 ±6%（画布高）。
+这意味着图就算画偏 5% 也**不用改锚点**。
 
-> ⚠️ 但要说清耦合：`CARD_RISE`（现 19vh）是**为「牌从球心升起」调的** —— 实测牌底起飞点落在球心上。
-> 球心一旦真挪，`CARD_RISE` 必须跟着重算，否则牌会从球**下方**起飞。所以本轮先把空区**瞄在 v1 球心**。
+> ⚠️ 耦合说清：`CARD_RISE`（现 19）是「牌的起手位置相对落点下移多少」，锚的是
+> **卡牌落点 (50%, 38.5%)**，不是球心。所以**球心不动，`CARD_RISE` 就不用动**。
+> 第八轮只把 `ANCHORS.orb.size` 由 31 改成 40，`x` / `y` / `CARD_RISE` / 卡牌面板契约全部零改动。
+
+**② 空区里不许画球，也不许画朝中央的辉光**：AI 的本能就是往空区补一颗球。
+第 1 版空区确实没画球，但手指「沿球下缘托住」这句被它理解成了「手指要贴着一个球面」，
+结果手指上方被补了一圈微弱的球形辉光（量出来 ≈36.8% 直径的软边暗环，比要求的 46% 小）。
+第 2 版必须把「唯一例外是手」写清楚，同时把「不许辉光」再说一遍。
 
 ---
 
 ## 3 · 提示词
+
+> **第 2 版的写法变化**：以用户 2026-09-19 提供的参考图（`assets/hero-art/refs/composition-ref-2026-09-19.jpg`）
+> 为**构图来源**，v1 母版为**画风来源**（第 4 节给了两张图的传参方式）。
+> 参考图本身**不能被直接采用**：它的球心在 (26%, 55%)、球径占画面高 66%，
+> 手机可见带只有 x∈[35%, 65%]，照搬一半的球会被裁掉。
 
 ### 3.1 中文（可直接粘贴）
 
@@ -107,26 +127,40 @@ aspect-ratio: 3 / 2
 以参考图为准，完全保持它的画风：暗夜厚涂油画质感、冷紫暗色调、雾气与星尘的画法、笔触与颗粒。
 只改构图，不改风格，不改色调。
 
-全新构图（3:2 横幅，女巫肩部以上特写）：
-· 一位戴巨大宽檐尖顶巫师帽的女巫，占满画面。帽檐压得极低，
-  整张脸几乎完全埋在帽檐的阴影里，只能勉强看出下颌与唇的轮廓，眼睛完全看不见。
-  深色长发从帽檐下垂落，遮住两侧脸颊。
-· 女巫通体极暗，接近剪影。只有帽檐上缘、左侧肩线、以及手指的轮廓
-  被一道紫罗兰色的冷边光勾出。脸上不要出现任何明亮的细节。
-· 画面正中央留出一块完全空无的区域：不要画任何球体、光球、玻璃球或球状光晕。
-  这块空区是一个圆，圆心在画面横向正中、纵向约 61% 处，直径约为画面高度的 46%。
-  空区里只允许有稀薄的暗雾，不要有清晰的物体边缘。
-· 画面**左下方**伸入一只手（只有一只，另一只手必须完全不出现在画面里）：
-  手背朝外、手指微微收拢，拇指在一侧、其余四指在另一侧，
-  从下方环住那块空区的下缘，像是正托住一颗看不见的球。
-  指尖最高不超过画面高度的 68%；手腕与小臂在画面下缘被裁掉。
-· 背景是深紫色的夜雾与稀疏星尘，向四周淡出。背景比人物更暗，
-  不要有任何抢眼的亮部或强对比结构。
-· 主光来自左上前方（冷月光），帽檐在脸上投下阴影，帽檐上缘与左侧肩线各有一道细边光。
+全新构图（3:2 横幅 1536×1024，女巫肩部以上特写）。
+镜头略低、略微仰视，画面整体是倾斜的、有动势的，**绝对不要左右对称的正视构图**：
+
+· 一顶巨大的宽檐尖顶巫师帽压在画面上方：帽冠顶部被画面上缘裁掉，
+  帽檐是一个巨大的圆盘，切出一条从画面左下方斜向右上方的强对角线。
+  帽檐左前缘压在画面高度 30%–40% 一带，右侧大幅溢出画面右缘、
+  右端伸到画面之外并抬升到画面高度 8%–22%。帽檐必须一头低、一头高，左右两端不对称。
+· 帽檐压得极低：女巫的脸几乎完全埋在帽檐的阴影里，是一团近乎全黑的暗部，
+  只能勉强看出下颌与唇的一点轮廓，眼睛完全看不见。
+  脸的位置在画面横向 52%–62%、纵向 20%–34%（略微偏右，不在正中）。
+· 深色长发从帽檐下垂落，遮住两侧脸颊，延伸到画面高度 48% 一带。
+· 女巫通体极暗，接近纯黑剪影，长袍与肩膀向画面下缘与两侧铺开。
+  全画面只有三处最亮的细节：① 帽檐上缘一道很细的冷紫罗兰色边光
+  ② 左侧肩线一道细边光 ③ 手指外缘的冷色高光。
+  除此之外人物上没有任何亮部，脸上不要出现任何明亮的细节。
+· 背景是纯暗紫色的夜雾，**不要星云、不要行星、不要碎石、不要任何清晰的天体结构**。
+  只在头部后方有一层比画面四角略亮的雾，把帽檐的剪影托出来，向画面四角淡出到接近全黑。
+  背景里绝对不要出现明亮的亮部或强对比结构。
+
+· 画面中央留出一块完全空无的区域：不要画任何球体、光球、玻璃球或球状光晕，
+  也不要画任何朝中央汇聚的辉光。这块空区是一个正圆，圆心在画面横向正中、纵向 61.5% 处，
+  直径约 532 像素（≈画面高度的 52%、画面宽度的 35%），**务必不要小于 490 像素**。
+  空区里只允许有稀薄的暗雾，不要有清晰的物体边缘。唯一的例外是下面那只手。
+
+· 画面下方伸入一只手（只有一只，另一只手必须完全不出现在画面里）。
+  掌心在空区正下方、位于画面下缘之外（被下缘裁掉），手腕与小臂也在画面下缘被裁掉。
+  四根手指从画面下方伸上来，指腹沿着空区下半部的弧线向上包覆、微微收拢（不要张成扇子），
+  指尖最高到达画面高度的 72%，拇指在左侧（横向 36%–42%）。
+  这是**托举**的姿态：手背朝向画面，手指从下方环住空区的下缘，像是正托住一颗看不见的球。
+  手指修长，指甲很长并带一道冷色高光。整只手横向落在画面 36%–64% 之内。
 
 不能出现：任何文字、字母、数字、签名、水印、logo、边框；
 第二只手或另一侧的手指；水晶球 / 玻璃球 / 光球 / 球状发光体；
-清晰的人脸五官；明亮的背景；对称的双臂。
+清晰的人脸五官；星云 / 行星 / 碎石等天体结构；左右对称的构图。
 参考图右下角原本有「AI生成 / WORKBUDDY」水印，必须彻底去掉 —— 新图里不要保留任何水印痕迹。
 ```
 
@@ -137,30 +171,53 @@ Keep the reference image's painting style exactly: dark impasto oil texture, col
 the same fog and stardust rendering, the same brushwork and grain.
 Change the composition only. Do not change the style or the palette.
 
-New composition (3:2 landscape, close-up of the witch from the shoulders up):
-· A witch in an enormous wide-brimmed pointed hat fills the frame. The brim is pulled very low;
-  her face is almost entirely buried in the brim's shadow — you can barely make out the jaw and lips,
-  the eyes are completely invisible. Long dark hair falls from under the brim, covering both cheeks.
-· She is extremely dark, close to a silhouette. Only the upper edge of the brim, the left shoulder line
-  and the outline of the fingers catch a thin violet rim light. No bright details anywhere on the face.
-· Leave a completely empty region in the exact centre of the image: do NOT paint any sphere,
-  orb, light-ball, glass ball or spherical glow. The empty region is a circle whose centre is
-  horizontally centred and about 61% down the image, with a diameter of about 46% of the image height.
-  Only thin dark fog inside it — no hard edges of any object.
-· One single hand enters from the lower-left edge (only one hand; the other hand must not appear at all):
-  back of the hand facing out, fingers slightly curled, thumb on one side and the other four fingers
-  on the other, cupping the lower edge of that empty region as if holding an invisible sphere.
-  Fingertips reach no higher than 68% of the image height; the wrist and forearm are cut off by the bottom edge.
-· Background: deep violet night fog and sparse stardust fading out. The background must be darker
-  than the figure — no eye-catching highlights, no strong-contrast structures.
-· Main light from the upper-left front (cold moonlight), so the brim casts a shadow across the face,
-  with a thin rim light along the brim's top edge and the left shoulder line.
+New composition (3:2 landscape, 1536x1024, close-up of the witch from the shoulders up).
+Camera slightly low, looking slightly up; the whole frame is tilted and dynamic —
+absolutely NOT a symmetrical frontal composition:
+
+· An enormous wide-brimmed pointed witch hat dominates the upper frame. The crown is cropped
+  by the top edge. The brim is a huge disc cutting a strong diagonal from lower-left to upper-right:
+  its front-left edge sits around 30-40% of the image height, while the right end overflows
+  far past the right edge and rises to 8-22% of the image height.
+  One side must be low and the other high — no symmetry.
+· The brim is pulled very low: her face is buried in shadow, an almost pure-black mass —
+  you can barely make out the jaw and lips, the eyes are completely invisible.
+  The face sits at x 52-62%, y 20-34% of the image (slightly right of centre).
+· Long dark hair falls from under the brim, covering both cheeks, reaching about 48% down.
+· She is extremely dark, close to a pure-black silhouette; robe and shoulders spread toward the
+  bottom and sides. Only three small details are bright:
+  ① a very thin cold-violet rim light along the brim's top edge
+  ② a thin rim light on the left shoulder line
+  ③ a cold highlight on the outline of the fingers.
+  No other highlights on the figure, and no bright detail anywhere on the face.
+· Background: pure dark-violet night fog. NO nebula, NO planets, NO debris,
+  no recognizable celestial structures. Only a layer of fog slightly brighter than the four corners,
+  sitting behind the head to separate the brim's silhouette, fading to near-black at the corners.
+  No eye-catching highlights, no high-contrast structures in the background.
+
+· Leave a completely empty region in the exact centre: do NOT paint any sphere, orb, light-ball,
+  glass ball or spherical glow, and do NOT paint any glow converging toward the centre.
+  The empty region is a perfect circle centred horizontally and 61.5% down the image,
+  about 532 px in diameter (≈52% of the image height, ≈35% of the width) —
+  it must not be smaller than 490 px. Only thin dark fog inside it; no hard edges of any object.
+  The single exception is the hand described below.
+
+· One hand enters from the bottom (only one; the other hand must not appear at all).
+  The palm is directly below the empty region and outside the bottom edge (cropped away);
+  wrist and forearm are cropped by the bottom edge too.
+  Four fingers rise from the bottom, their pads wrapping up along the lower arc of the empty region,
+  slightly gathered (not fanned out), fingertips reaching no higher than 72% of the image height;
+  the thumb is on the left (x 36-42%).
+  This is a CUPPING pose: back of the hand toward the viewer, fingers wrapping the lower rim of the
+  empty region as if holding an invisible sphere. Slender fingers with long nails catching a cold
+  highlight. The whole hand stays within x 36-64%.
 
 Must NOT contain: any text, letters, numbers, signature, watermark, logo or border;
-a second hand or fingers on the other side; a crystal ball, glass sphere, orb, light-ball or spherical glow;
-clearly rendered facial features; a bright background; symmetrical arms.
-The reference image has an "AI生成 / WORKBUDDY" watermark in the bottom-right corner — remove it completely,
-leave no watermark trace anywhere in the new image.
+a second hand or fingers on the other side; a crystal ball, glass sphere, orb, light-ball or
+spherical glow; clearly rendered facial features; nebula / planets / debris or any celestial
+structure; a symmetrical composition.
+The reference image has an "AI生成 / WORKBUDDY" watermark in the bottom-right corner —
+remove it completely, leave no watermark trace anywhere in the new image.
 ```
 
 ---
@@ -169,11 +226,12 @@ leave no watermark trace anywhere in the new image.
 
 | 参数 | 值 | 说明 |
 |---|---|---|
-| `image1` | `assets/hero-art/bg/参考这张塔罗主视觉_….png`（v1 母版） | image-to-image；**必须给参考图**，否则会画出「另一个女巫」 |
-| `size` | **1536×1024** | ① 工具明确支持的尺寸 ②`build_hero_assets.py` 的 `HERO_SIZE` 就是这个，出 2048 也会被缩回来 |
+| `image1` | `assets/hero-art/bg/_v1/参考这张塔罗主视觉_….png`（v1 母版） | **画风来源**。第 1 版就是靠它把画风守住的，保持同一路数 |
+| `image2` | `assets/hero-art/refs/composition-ref-2026-09-19.jpg`（用户参考图） | **构图来源**。只借它的构图性格（倾斜/特写/明暗），不借它的球与星云 |
+| `size` | **1536×1024** | ① 工具明确支持的尺寸 ② `build_hero_assets.py` 的 `HERO_SIZE` 就是这个 |
 | `quality` | high | |
-| `input_fidelity` | 先给**高** | 保画风优先。若构图**没跟着变**（AI 太保守），降一档再来 |
-| `output_dir` | 单独目录（例 `assets/hero-art/bg/v2/`） | **一次只出一张，不要并行**（ImageGen 并行会串目录 / 静默失败） |
+| `input_fidelity` | 先给**高** | 保画风优先。若构图**没跟着变**（太保守），降一档再来 |
+| `output_dir` | 单独目录（例 `assets/hero-art/bg/v3/`） | **一次只出一张，不要并行**（ImageGen 并行会串目录 / 静默失败） |
 | `background` / `footnote` | 不传 | 不要透明底（背景是满版画），不要水印 |
 
 ---
@@ -182,55 +240,52 @@ leave no watermark trace anywhere in the new image.
 
 ### 5.1 落盘（顺序很重要）
 
-1. **先把 v1 那张挪走**：`assets/hero-art/bg/参考这张…png` → `assets/hero-art/bg/_v1/`
+1. **先把上一版挪走**：`assets/hero-art/bg/以参考图为准_….png` → `assets/hero-art/bg/_v2/`
    （`find_src()` 取目录里**排序第一张**图，两张并存一定取错）
 2. 新图放进 `assets/hero-art/bg/`
 3. `"$PY" scripts/build_hero_assets.py` → 产出 `public/skins/mist-night/hero-bg.webp`（1536×1024）
-4. 换主视觉后**必须重跑** `build_lqip.py` 与 `build_og_cover.py`，否则模糊底与分享封面和实际画面对不上
+4. 换主视觉后**必须重跑** `build_lqip.py` 与 `build_og_cover.py`
 
 ### 5.2 关于水印
 
 `build_hero_assets.py` 用 `repair_by_mirror(region=(0.78, 0.90, 1.0, 1.0))` 修右下角水印，
-前提是**背景左右近似对称**。v2 只有一只手，这个前提弱化了。
-但水印区（y ≥ 90%）落在**任何视口都不可见的带**里（可见窗口最高到 y≈87%），所以：
-- 镜像修补**看不出来**，可以照跑
-- 但要**目视核对一次**：修补有没有把手的袖口镜像到右侧去
+前提是**背景左右近似对称**。v2 只有一只手且构图倾斜，这个前提**已经不成立** ——
+所以第 2 版要**目视核对**：修补有没有把下方的袖子镜像到右侧去。若明显，就跳过镜像修补
+（水印区 y≥90% 落在任何视口都不可见的带里，可见窗口最高到 y≈87%）。
 
 ### 5.3 验收（不靠肉眼，靠量）
 
 | 判据 | 怎么量 | 期望 |
 |---|---|---|
-| 空区圆心与直径 | Python 量新图里的暗区（或直接量「掌心辉光/最暗连通区」） | 圆心 ≈(50%, 61%)、直径 ≥46%；**偏差 ≤5% 就直接沿用 v1 锚点** |
-| 脸/球位/手是否在中央安全盒内 | 跑 `scripts/preview_hero.py` 出 504×784 的合成图 | 三者在 x ∈ [33%, 67%] 内可见 |
-| 球与空区的净空 | 球径 31% 叠在空区上 | 球边缘距空区边缘 ≥4%（画布高） |
+| 空区圆心与直径 | `scripts/_analyze_ref_composition.py` 改跑新图，量软边暗区 | 圆心 ≈(50%, 61.5%)、直径 ≥52%（≥48% 可接受）；偏差 ≤5% 直接沿用锚点 |
+| 手的可视性 | 按可见窗口裁出「宽屏看到的带」并做对比拉伸 | 能看出至少 3 根指尖搭在球位下缘 |
+| 脸/球位/手是否在中央安全盒内 | 跑 `scripts/preview_hero.py` 出 504×784 的合成图 | 三者在 x ∈ [35%, 65%] 内可见 |
+| 球与空区的净空 | 球径 40% 叠在空区上 | 球边缘距空区边缘 ≥5%（画布高） |
 | 不破坏既有契约 | `scripts/flows/audit-draw.js` + `audit-title.js` | 标题/卡牌/面板重叠仍为 0 |
+| 球变大后的稳态 | 同上，额外量球 rect 与卡牌底边净空 | 净空 >0（推算 64px），球不许压住卡牌 |
 
-### 5.4 首次出图的实测结果（2026-09-19，已装入皮肤）
+### 5.4 第 1 版出图的实测结果（2026-09-19，**已被用户否掉，仅作教训保留**）
 
-图：`assets/hero-art/bg/以参考图为准_…_2026-09-19T12-36-04.png`（1536×1024，1.79 MB，**1 次 / 约 5–10 积分**）
+图：`assets/hero-art/bg/以参考图为准_…_2026-09-19T12-36-04.png`（1536×1024，1.79 MB）
 
 | 判据 | 期望 | 实测 | 判定 |
 |---|---|---|---|
-| 球心在图像坐标 | (50%, 61%) | **(50.0%, 61.5%)** | ✓ 偏差 0.5% → **锚点零改动** |
+| 球心在图像坐标 | (50%, 61%) | **(50.0%, 61.5%)** | ✓ 锚点零改动 |
 | 宽扁屏可见窗口 | x≈[2%,98%] y≈[10%,76%] | x[1.9%,98.1%] **y[10.4%,75.7%]** | ✓ |
 | 手机可见窗口 | x≈[35%,65%] | x[35.2%,64.8%] | ✓ |
-| 空区直径 | ≥46% | **≈36.8%**（径向扫描中位半径 18.4%） | ✗ 偏小（球余量从 ±7% 降到 ±2.9%） |
-| 空区是否被画成球 | 无硬边、无球体 | **软边暗区，无轮廓、无球状高光** | ✓ |
-| 脸是否被帽檐阴影盖住 | 眼睛不可见、只剩轮廓 | 眼窝全黑，仅鼻梁/唇极弱可见 | ✓（2× 放大后判读） |
-| 一只手、另一只消失 | 必须 | ✓ 只有一只，从左下伸入 | ✓ |
-| 水印 | 去掉 | ✗ 仍在右下角 | 无害：位于 x 86–97% / y 92–98%，**任何视口的可见窗口都取不到它** |
-| 既有几何契约 | 重叠 = 0 | `audit-draw` `overlapPx: 0` / 净空 2.3px / 八拍 5501.8ms；`audit-title` 三处重叠全 0 | ✓ |
+| 空区直径 | ≥46% | **≈36.8%** | ✗ 偏小 |
+| 空区是否被画成球 | 无硬边、无球体 | 软边暗区，无轮廓 | ✓ |
+| 脸是否被帽檐阴影盖住 | 眼睛不可见 | 眼窝全黑 | ✓ |
+| 一只手、另一只消失 | 必须 | ✓ | ✓ |
+| 水印 | 去掉 | ✗ 仍在右下角 | 无害（任何视口都取不到） |
+| 既有几何契约 | 重叠 = 0 | `overlapPx: 0` / 净空 2.3px / 八拍 5501.8ms | ✓ |
+| **构图性格** | 倾斜、有动势 | **正视、左右对称** | ✗ **用户否掉的主因** |
 
-**⚠️ 本轮最重要的发现（规格书的漏洞，不是出图工具的错）：宽屏上手看不见。**
-
-- 第 2 节把「手」定在画布 y 61%–88%（依据是球的下缘与卡牌底线），**但没有拿它去和可见窗口比**。
-- 而宽扁屏可见窗口下缘只到 **y≈75.7%**（1564×708 实测）→ 手只有最上面一截勉强进得来，而那一截恰好最暗。
-- 真页面验证：`v2-idle-wide.png` 的底部带（视口 y60–100%）**做对比拉伸后仍然没有手**，只有袍子的暗块。
-- 反过来手机（可见窗口 y[1.2%, 97.3%]）**手完整可见**，`v2-compose-390x844.png` 里托举的姿态很清楚。
-- 结论：**「手在球下缘」与「手在宽扁屏上可见」在几何上几乎互斥** ——
-  球下缘在 y77%，而可见下缘在 y75.7%，两者只差 1.3%。
-  想让手在桌面也看得见，手就得**沿球的侧缘往上抓**（指尖到 y≈55%），而不是从下方托。
-
+**⚠️ 同一轮另一个发现（规格书的漏洞，不是出图工具的错）：宽屏上手看不见。**
+第 1 版把「手」定在画布 y 61%–88%，**但没有拿它去和可见窗口比**。
+而宽扁屏可见窗口下缘只到 **y≈75.7%**，手只有最上面一截勉强进得来，而那一截恰好最暗。
+结论：「手在球下缘」与「手在宽扁屏上可见」在几何上几乎互斥 ——
+**手指必须沿球的弧线往上够到 y≈72%**，而不是停在 y80% 以下。
 
 ---
 
@@ -238,12 +293,12 @@ leave no watermark trace anywhere in the new image.
 
 | # | 问题 | 决定 | 后果 / 落点 |
 |---|---|---|---|
-| 1 | 空区圆心锚在哪 | **甲 · 钉在 v1 球心 (50%, 61%)** | `ANCHORS.orb` / `CARD_RISE` / 卡牌面板契约**零改动**。空区直径 ≥46%（球径 31% 的 1.5 倍）换来球在空区里 **±7% 平移自由度** → 图就算画偏 5% 也**不用改锚点** |
-| 2 | 球是透明窗还是自身发光 | **甲 · 自身发光** | 事实前提：three 的 `transmission` 采样的是**场景环境，不是 canvas 背后的 DOM** → 「球折射女巫」这条路本身走不通。改为内部程序化星云（与页面雾气粒子同源）+ 冷蓝菲涅尔边缘 + 镜面高光，中部用半透明暗色压掉背后的星。**连带约束：空区里不画任何辉光** |
-| 3 | 手机上帽檐要不要完整 | **甲 · 帽檐主动溢出** | 手机上帽檐两侧被裁 → 读作「近距离特写」，头可以比 v1 更大。必须守住：**脸 + 空区 + 手三者落在 x ∈ [33%, 67%]** |
+| 1 | 空区圆心锚在哪 | **甲 · 钉在 v1 球心 (50%, 61%)** | 空区直径 ≥52%（球径 40% 的 1.3 倍）换来球在空区里 **±6% 平移自由度** |
+| 2 | 球是透明窗还是自身发光 | **甲 · 自身发光** | three 的 `transmission` 采样的是**场景环境，不是 canvas 背后的 DOM** → 「球折射女巫」走不通。改为内部程序化星云 + 冷蓝菲涅尔边缘 + 镜面高光。**连带约束：空区里不画任何辉光** |
+| 3 | 手机上帽檐要不要完整 | **甲 · 帽檐主动溢出** | 手机上帽檐两侧被裁 → 读作「近距离特写」。必须守住：**脸 + 空区 + 手三者落在 x ∈ [35%, 65%]** |
 | 4 | 手在左还是右 | **左手**（从左下伸入，形成指向中央球心的斜线） | 提示词第 3 节已按左侧写 |
-| 5 | 揭晓态球被面板盖 73.5% | **不处理** | 待抽态球是完整主角、抽完把舞台交给卡牌与解读；3D 的投入在待抽态与抽牌仪式里已全额兑现 |
-| 6 | 上线落哪 | **GitHub 私有仓 + Vercel** | 见第 7 节。**私有仓**这条同时避开一个坑：免费账号下 GitHub Pages 要求仓库公开，而仓里躺着 57 MB 美术母版 |
+| 5 | 揭晓态球被面板盖 | **不处理** | 待抽态球是完整主角、抽完把舞台交给卡牌与解读 |
+| 6 | 上线落哪 | **GitHub 私有仓 + Vercel** | 见第 7 节 |
 
 ---
 
@@ -251,16 +306,152 @@ leave no watermark trace anywhere in the new image.
 
 本机事实（2026-09-19 实测）：
 
-- `gh` **已安装且已登录**：v2.92.0，账号 `VickRolL`，token scopes 含 `repo`，git 传输协议 https 
-  → **建私有仓 + push 这两步不需要用户手动操作**
-- `git remote -v` 为空 → 尚未关联任何远端
+- `gh` **已安装且已登录**：v2.92.0，账号 `VickRolL`，token scopes 含 `repo`
 - **Vercel 那一步无法代做**：需要在 vercel.com 用 GitHub 账号授权登录并 import 仓库
 
-顺序：本地提交干净 → `gh repo create --private` → `git push` → 用户在 Vercel 侧 import。
+**已完成（2026-09-19）**：仓为 `https://github.com/VickRolL/tarot-daily`（private），
+首次推送 `2edb30f`，111 个文件 / 73 MB。待办只剩 Vercel 侧 import。
 
-**已完成（2026-09-19）**：仓为 `https://github.com/VickRolL/tarot-daily`（private），首次推送 `2edb30f`，111 个文件 / 73 MB。`gh` 本机已登录，**建仓与推送都不需要用户操作**；待办只剩 Vercel 侧 import。
+⚠️ 推之前必须复核 `.gitignore`：`assets/card-art`、`assets/hero-art` 是**要入库的**（重出要花积分），
+而 `node_modules` / `dist*` / `assets/_debug` / `assets/previews` / `assets/card-styles` /
+`_archive` 必须排除。
 
-⚠️ 推之前必须复核 `.gitignore`：`assets/card-art`（22 张牌面母版）、`assets/hero-art`（主视觉母版）
-是**要入库的**（重出要花积分），而 `node_modules` / `dist*` / `assets/_debug` / `assets/previews` /
-`assets/card-styles` / `_archive` 必须排除。基线提交实测为 118 文件 / 70.92 MB。
+---
+
+## 8 · 第八轮：用户参考图的构图差量分析（2026-09-19）
+
+用户提供参考图 `clipboard-2026-09-19T13-17-25-147Z-5098f5c9.jpg`（1080×608，16:9），
+原话是「**它的构图比较偏向我的需求**，但并不是直接采用这张图片」。
+下面是把三张图放进同一坐标系（10% 网格，见 `assets/_debug/{ref,v1,v2}-grid.png`）量出的差量。
+
+### 8.1 逐项差量
+
+| 维度 | 用户参考图 | 第 1 版 v2 | 处置 |
+|---|---|---|---|
+| 球心 | (26%, 55%) 偏左 | (50%, 61.5%) | ❌ **不能搬**：手机可见带 x∈[35%,65%]，球会废掉一半 |
+| 球径 | 66% 画面高（≈400px/608） | 31% | ✅ 采纳精神：改 **40%**（用户拍板） |
+| 手 | x[0,48%] y[48,100%]，抓球的**左下缘**，长指甲清晰 | 指尖勉强到 y70%，宽屏看不见 | 用户拍板 **保持托底**，但指尖上提到 **y72%** 换宽屏可见 |
+| 明暗 | p99=**0.618**、高光面积 **13.5%**；最暗块 0.0095 / 最亮块 0.239 | p99=**0.270**、高光面积 **1.09%**；最暗 0.057 / 最亮 0.129 | ✅ 这是「发灰、平」的根源 → 靠**近黑主体 + 三处细边光**补，不靠提亮背景 |
+| 背景 | 星云 + 行星 + 碎石，四角有亮部 | 均匀暗雾、无结构 | 用户拍板 **维持纯暗雾**（不上星云/行星） |
+| 视角 | 低角度仰视 + 倾斜，帽檐切强对角线 | 正视、左右对称 | ✅ 采纳：第 2 版写死「倾斜、不许对称」 |
+| 脸 | x57–65% y33–42%，极小极暗 | x45–55% y30–42% | ✅ 搬到 x52–62%（仍守得住安全盒） |
+| 帽檐 | 极大，右侧溢出画面外 | 只溢出约 10%，左右对称 | ✅ 加大溢出，左低右高 |
+
+### 8.2 三个维度的量化对照（全部由 `scripts/_analyze_ref_composition.py` 打印）
+
+```
+                mean    p50     p95     p99    高光面积(V>0.35)
+参考图          0.0872  0.0417  0.3282  0.6178   13.50%
+v1 母版         0.0840  0.0692  0.1917  0.2916    2.56%
+v2 第 1 版      0.0921  0.0812  0.1787  0.2700    1.09%
+```
+
+结论：三张图的**平均亮度几乎一样**（0.084–0.092），差别全在**分布**上 ——
+参考图的 p99 是 v2 的 2.3 倍、高光面积是 12 倍。也就是说 v2 不是「太暗」，
+而是**没有亮部**：所有像素都挤在均值附近，读起来就是「糊、平」。
+所以第 2 版的处方是**拉开分布**（压黑主体 + 收缩但提亮的三处边光），
+不是整体提亮 —— 后者会违反「背景不能抢视线」。
+
+### 8.3 第八轮三问拍板
+
+| # | 问题 | 决定 |
+|---|---|---|
+| 1 | 球的体量 | **放大到 40%**（改 `ANCHORS.orb.size`，`x`/`y`/`CARD_RISE` 不动） |
+| 2 | 背景要不要星云/行星 | **维持纯暗雾**（不上天体结构） |
+| 3 | 手怎么抓 | **保持托底**（掌心在球下方；但指尖上提到 y≈72% 以换宽屏可见） |
+
+---
+
+## 9 · 第 2 版出图的实测（2026-09-19 13:28，**当前生效**）
+
+出图原样：`assets/hero-art/bg/_raw/以参考图为准_…_2026-09-19T13-28-21.png`
+成品源图：`assets/hero-art/bg/hero-v2b.png`（经 `scripts/fix_hero_void.py` 后处理，**必须经过这一步**）
+传参：`image1` = v1 母版（画风）、`image2` = `assets/hero-art/refs/composition-ref-2026-09-19.jpg`（构图）
+
+| 判据 | 期望 | 实测 | 判定 |
+|---|---|---|---|
+| 构图性格 | 倾斜、不对称、帽檐切对角线 | 帽檐左低右高、右侧溢出画面、整体倾斜 | ✓ **本轮的核心目标达成** |
+| 球心（画布坐标） | (50%, 61.5%) | **实测 (50, 61.5)**（真实页面探针） | ✓ 与 `ANCHORS.orb` 完全一致 |
+| 球径 | 画布高 40% | **40%**（rect 433.7px @ 1564×708） | ✓ |
+| 空区等效直径 | ≥52% | **46%（阈值 0.07）/ 55%（阈值 0.08）** —— 原图只有 39% | ✓（后处理后达标） |
+| 球位圆里被手挡住的面积 | ≤15% | **3.8%（阈值 0.10）/ 1.8%（0.13）** | ✓ 远低于上限 |
+| 手在宽屏可见 | 要被看见 | **亮部最高到画布 y=60.4%**，而宽屏可见下缘 y=75.7% → 有 15.3% 的一段手在屏幕上 | ✓ |
+| 脸的位置 | x 52–62%、y 20–34%、几乎全黑 | 位置相符，眼窝全黑 | ✓ |
+| 一只手、另一只消失 | 必须 | ✓ | ✓ |
+| 明暗分布 | 拉开（p99 要显著高于第 1 版） | 全图 p99 **0.2716 → 0.3675**（+35%），高光面积 0.50% → 1.14% | ✓ |
+| 球与卡牌净空 | >0 | **实测**：球顶 337.1px，卡牌底边 432.6px → 净空充足；`audit-draw` 全绿 | ✓ |
+| 既有几何契约 | 重叠 = 0 | `overlapPx: 0` / 净空 39.2px / 总时长 5568.9ms / 8 条断言全过 | ✓ |
+| 水印 | 去掉 | ✗ 仍在右下角 | 无害（y≥90% 任何视口都取不到） |
+
+### 9.1 模型第二次违规了同一件事：空区里又画了「球」
+
+第 1 版是「一圈软边暗环」，这一版更实在 —— **1:1 放大后是一颗没打光的球**：
+有清楚的球面、有上缘反光，核心 L=0.104，而周围雾只有 0.065。
+不处理的话，3D 球的轮廓会被这颗假球的边缘「托」出来。
+
+处置写成了独立脚本 `scripts/fix_hero_void.py`（**不要手动改图**，要改就改这个脚本）：
+
+> 思路：**在空区内重建一层平滑暗雾**。以全图大半径（0.22H）模糊场为底继承雾气的大尺度走向，
+> 把它重映射到 0.030–0.070 的窄暗区间，再用软遮罩（径向 smoothstep + 高亮保护 + 手保护）混合。
+> 结果是空区变成无纹理、无边界、只有大尺度渐变的暗雾 —— 顺带把空区等效直径从 39% 提到 46–55%。
+> 外加 **±0.9/255 的抖动**：暗部 L≈0.06 时 1 级量化就是亮度的 6%，不加必出色带。
+
+**四个失败尝试（都别重走）：**
+
+| 尝试 | 结果 | 为什么不行 |
+|---|---|---|
+| ① 按亮度线性压暗到环境光 | 空区变成**斑驳脏纹** | 压暗只缩小绝对反差，8bit 量化台阶的相对占比反而变大 |
+| ② 再叠 46px 高斯柔化 | 仍是斑驳 | 斑驳尺度远大于模糊半径，且它来自量化台阶，柔化只是抹糊 |
+| ③ 按亮度**比值**缩放 RGB 替换 | 空区爆出**亮点噪斑** | L=0.005 的暗像素遇 base=0.06 得到 12 倍缩放，乘完在 255 处削顶 |
+| ④ 逐像素算手部判据 R/B | 空区**椒盐噪点** | 暗部 R、B 只有个位数，量化噪声让比值在「手/雾」间随机跳 → 遮罩空间随机 |
+
+**手部判据的正确写法**：用 **R/B 比值**（手 0.883 / 空区核心 0.808 / 左雾 0.765 / 右袍 0.688 —— 有分离度），
+**不是 R−B**（这张图整幅都是冷紫，手指区 R−B=−5.3、空区核心 R−B=−6.3，等于没判），
+而且**必须在模糊场（0.02H）上算**，不能在原图上逐像素算（见失败 ④）。
+
+---
+
+## 10 · 页面层的连带发现：暗角必须跟着重新标定（2026-09-19）
+
+换完主视觉后截真页面（`assets/previews/v2b-idle-wide.png`），发现**女巫几乎不见了**。
+排查结论：不是图的问题，是 `.scene__vignette`（`src/index.css`）——
+
+```
+原值：径向 transparent 30% → 0.55@72% → 0.94@100%
+      线性 0.72@0% → transparent 22% → transparent 58% → 0.92@100%
+```
+
+女巫恰好整体落在「顶部 0.72」与「底部 0.92」这两条压暗带里。而这套参数是按 **v1 的明暗分布**
+（亮雾 + 中调袍子）标的；v2 的处方是「主体压成近黑 + 三处细边光」，
+**近黑的主体在暗角里会直接掉到感知阈值以下**。
+
+已改为（空间形状不变，只收强度）：
+
+```
+径向 transparent 34% → 0.42@74% → 0.82@100%
+线性 0.48@0% → transparent 24% → transparent 64% → 0.74@100%
+```
+
+**安全性是有数的**（三张同视口截图的亮度分布对比，`scripts/_cmp_shots.py`）：
+
+| 截图 | 全图 mean | p90 | p99 | 上带 0–22% |
+|---|---|---|---|---|
+| 旧 v2（31% 球 + 旧暗角） | 0.0998 | 0.1675 | 0.3597 | 0.0760 |
+| 新 v2b（40% 球 + 新暗角） | **0.1109** | **0.1874** | **0.4709** | **0.0836** |
+| 新 v2b（隐球 · 隐暗角，纯底板） | 0.1074 | 0.1807 | 0.3961 | 0.1123 |
+
+结论：新页面**比旧页面更亮、对比更强**（p90 +12%、p99 +31%），暗角收强度没有把页面变暗 ——
+它只是不再把已经在 0.02–0.05 的主体压到看不见。标题自带文字阴影、解读面板自带渐变底色
+与 `backdrop-filter`，都不依赖这层暗角兜底可读性（`audit-title` 三处重叠全 0）。
+若要回退，改回上面那两行原值即可。
+
+### 10.1 仍然存在的两条（**未处理，留给用户拍板**）
+
+1. **手在桌面端只露出一段。** 亮部最高到画布 y=60.4%，而最扁的窗口（1564×708）可见下缘在 y75.7%，
+   所以只看得到 15.3% 的一段手；16:9 窗口（1920×950 → y80%）会多一截。
+   要更完整，只有两条路：把手再往上挪（= 改成「沿球侧缘抓」，需重新出图），
+   或下调 `HERO_LAYOUT.positionY`（会牵动主视觉在屏幕上的取景，属于功能层）。
+2. **女巫读起来是近黑剪影。** 这是「维持纯暗雾」+「主体压黑」两条决定的直接结果 ——
+   参考图里那张脸同样是全黑的，区别是它背后有亮星云托着轮廓。本项目选了暗雾，
+   所以轮廓只能靠三处细边光。若想更清楚，杠杆是给头部后方加一层亮雾（第八轮未选）。
 

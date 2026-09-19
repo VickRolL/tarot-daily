@@ -115,9 +115,21 @@ body {
   position: absolute;
   inset: 0;
   pointer-events: none;
+  /* 2026-09-19 第八轮：暗角**重新标定**（原值：径向 0.55@72%/0.94@100%，
+     线性 0.72@0% → 58% → 0.92@100%）。
+     起因：v2 主视觉换了明暗分布 —— 新图的处方是「主体压成近黑 + 三处细边光」，
+     而旧暗角是按 v1 那张「亮雾 + 中调袍子」标的。两者叠加后实测：
+     女巫整个人落进顶部 0.72 与底部 0.92 两条压暗带里，屏幕上几乎整个消失
+     （对比 `assets/_debug/v2b-plate-only-wide.png` 与 `assets/previews/v2b-idle-wide.png`）。
+     注意：暗角是**降低对比**而不是改变颜色，所以它不会让画面变亮 —— 它只是把
+     本来就在 0.02–0.05 的主体进一步压到感知不到。所以这里收的是「压暗的强度」，
+     空间形状（椭圆偏上 42%、四角收紧）保持不变。
+     代价已核对：标题自带文字阴影，底板在标题带仍有 ≥0.06 的局部对比；
+     解读面板自带渐变底色（透明 → 0.82 → 0.97）与 backdrop-filter，
+     不依赖这层暗角兜底可读性。 */
   background:
-    radial-gradient(ellipse at 50% 42%, transparent 30%, rgba(8, 5, 15, 0.55) 72%, rgba(8, 5, 15, 0.94) 100%),
-    linear-gradient(to bottom, rgba(8, 5, 15, 0.72) 0%, transparent 22%, transparent 58%, rgba(8, 5, 15, 0.92) 100%);
+    radial-gradient(ellipse at 50% 42%, transparent 34%, rgba(8, 5, 15, 0.42) 74%, rgba(8, 5, 15, 0.82) 100%),
+    linear-gradient(to bottom, rgba(8, 5, 15, 0.48) 0%, transparent 24%, transparent 64%, rgba(8, 5, 15, 0.74) 100%);
 }
 
 .scene__grain {
