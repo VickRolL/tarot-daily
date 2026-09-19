@@ -51,7 +51,7 @@ const itemVariants = (reduced) => ({
   }
 })
 
-export default function ReadingPanel({ card, mode, onAgain, onShare }) {
+export default function ReadingPanel({ card, mode, onAgain, onShare, onDetail }) {
   const reduced = useReducedMotion()
   const item = itemVariants(reduced)
 
@@ -65,6 +65,12 @@ export default function ReadingPanel({ card, mode, onAgain, onShare }) {
       <div className="panel__inner">
         <motion.p className="panel__kicker" variants={item}>
           {card.num} · {card.nameEn.toUpperCase()}
+          {/* 元素与星象（2026-09-20）：拼在**同一行**里，不另起一行 ——
+              面板可用高度只有视口高的 38.5%，多一行就等于多啃掉 16~24px，
+              竖屏（净空实测只剩 10.7px）直接翻负。 */}
+          <span className="panel__kicker-meta">
+            {card.element} · {card.astrology}
+          </span>
         </motion.p>
         <motion.div className="panel__tags" variants={item}>
           {card.keywords.map((word) => (
@@ -79,7 +85,21 @@ export default function ReadingPanel({ card, mode, onAgain, onShare }) {
         <motion.p className="panel__advice" variants={item}>
           今日建议 · {card.advice}
         </motion.p>
+        {/* 宜 / 忌：只在**够高的视口**显示（见 index.css 的 min-height 查询）。
+            矮视口强行塞进来会把面板顶到卡牌上 —— 那比「少显示一行」严重得多。
+            矮屏用户不是没有这份内容，它在「完整解读」里完整地待着。 */}
+        <motion.p className="panel__oath" variants={item}>
+          <span className="panel__oath-item" data-kind="favor">
+            宜 · {card.favor.join(' · ')}
+          </span>
+          <span className="panel__oath-item" data-kind="avoid">
+            忌 · {card.avoid.join(' · ')}
+          </span>
+        </motion.p>
         <motion.div className="panel__actions" variants={item}>
+          <button type="button" className="btn" onClick={onDetail}>
+            完整解读
+          </button>
           {mode === 'unlimited' && (
             <button type="button" className="btn btn--primary" onClick={onAgain}>
               再抽一次

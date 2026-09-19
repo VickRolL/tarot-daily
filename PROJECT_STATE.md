@@ -24,13 +24,17 @@
 | 2 · 风格锚点 | ✅ 卡牌风格已定稿（二次元赛璐璐 + 统一卡框）；主视觉 v2（无球版）已产出 |
 | 3 · 基础架构 | ✅ 已完成，可运行，构建通过（含牌面三层结构与牌面总览面板） |
 | 4 · 美术资产 | ✅ **22/22 牌面 + 统一卡框 + 牌背 + 主视觉拆层（背景 / 水晶球）全部完成并接入代码**；`hero-figure` 人物层未做（架构上可选，见 `NEXT_STEPS.md`） |
-| 5 · 打磨与上线 | 🔶 **进行中**：整页手感升级 + **抽牌仪式分拍改造**已完成；**主视觉 v2 的水晶球已换成真 3D（three.js）**、手抠成独立前景层、女巫的脸压暗到五官不可见；分享卡片图 / 分享 meta / 首屏预热 / `DRAW_MODE` 切 daily 已完成；**离线副本已移除**（v2 起只走 http）；**发布上线未做** —— 这是唯一实质待办，且需要用户本人选平台并登录 |
+| 5 · 打磨与上线 | 🔶 **进行中**：整页手感升级 + **抽牌仪式分拍改造**已完成；**主视觉 v2 的水晶球已换成真 3D（three.js）**、手抠成独立前景层、女巫的脸压暗到五官不可见；**内容与美感补齐（第二十一轮）**：牌意加深（元素/星象/象征/宜忌）+ 用户可开的「牌之图鉴」+ 主页两侧漂浮低语标签；分享卡片图 / 分享 meta / 首屏预热 / `DRAW_MODE` 切 daily 已完成；**离线副本已移除**（v2 起只走 http）；**发布上线未做** —— 这是唯一实质待办，且需要用户本人选平台并登录 |
 | 6 · 交付打包 | 🔶 **形态已改**：交付改为**线上链接**（Q2 决策：静态托管 + git），不再发含离线副本的 zip。打包脚本保留给需要代码的人并已瘦身（去掉离线副本逻辑与 `--no-preview`）。旧包 `*-2026-09-19.zip` **已作废**（内容过时，且含已删除的离线副本） |
 
 
 ## 已定需求（除非用户改主意，不要再问第二遍）
 
 - **核心玩法**：每日一签。不做经典牌阵、不做提问式占卜、不做牌意百科
+  - ⚠️ **2026-09-20 用户改主意一处**：「图鉴可以加，但是先做的简单一些有就可以了」→ 做了**只读的「牌之图鉴」**
+    （22 格 + 点开完整解读）。它仍**不是**百科：不可搜索、不分类、不索引，只是「我这副牌长什么样」的一览。
+    完整解读也**只讲这一张牌的正位含义**，不做多义项/多流派对照
+- **正逆位**：2026-09-20 用户明确「**先不用考虑**」→ 牌意只写正位。数据结构上不要预留半成品字段（免得后人以为已支持）
 - **用户系统**：不做登录，抽牌记录存浏览器本地，后续可加本地日历回看
 - **牌库**：MVP 先做 22 张大阿卡纳，跑通后再补 56 张小阿卡纳
 - **抽牌规则**：**最终形态是一天锁一次**；开发测试期用不限次数（代码里可实时切换）
@@ -71,10 +75,19 @@ tarot-app/
 │   ├─ build_og_cover.py         ⭐ 合成带球的主视觉 → 1200x630 分享封面 public/og-cover.jpg
 │   ├─ preview_hero.py           ⭐ 不需要浏览器的合成预览（复现 CSS 底板数学，核对锚点）
 │   ├─ shot.mjs                  ⭐ 无头截图 / 视觉自检（CDP 驱动本机 Chrome，零依赖；支持 --seed / --reduced）
+│   ├─ run-flows.mjs             ⭐ **通用批量运行器**（`spawnSync` 绕开降级 shell；一次跑多个 flow × 多视口）
+│   ├─ verify-orb3d.mjs          ⭐ 3D 球四用例核验（桌面 / 真机 mobile / reduced ×2），末尾打印 ALL_PASS
+│   ├─ verify-halo.mjs           ⭐ 充能光晕消融归因（配 `_check_halo.py` 做径向亮度归属）
+│   ├─ build_orb_texture.py      ⭐ 球内星云等距圆柱贴图（循环卷积保无缝，构建期烤好）
+│   ├─ build_hero_hand.py        ⭐ 手部前景层抠图（亮度阈值，压球前）
+│   ├─ fix_hero_face.py          ⭐ 女巫脸部引导插值压暗（幂等，可重复跑不叠深）
 │   ├─ flows/                    ⭐ shot.mjs 用的流程脚本：reveal / share / welcome / welcome-frame /
 │   │                              ritual-frame（抽牌仪式四帧按状态取帧） / probe-draw-timeline /
 │   │                              dev-verify（开发模式自检，跑在 dev server 上，含命中测试）
 │   │                              / audit-motion / audit-draw / audit-title
+│   │                              / probe-whispers（两侧低语：数量 / 穿透点击 / 几何带 / 轮切节奏）
+│   │                              / probe-gallery（图鉴入口可点性 / 22 格 / 详情叠加与 Esc 回退）
+│   │                              / probe-panel-worst（**逐张遍历 22 张牌**量面板净空，取最坏）
 │   ├─ verify_manifest.mjs       ⭐ 按 `MANIFEST.sha256` 逐文件校验快照完整性（`node scripts/verify_manifest.mjs <目录>`）
 │   │                              —— 替代原先文档里那条五层转义的一行命令，见第 6 节第 31 条
 │   ├─ contact_sheet.py          总览拼版（22 张联络表，验收风格/边框一致性用）
@@ -98,7 +111,10 @@ tarot-app/
 └─ src/
     ├─ config/skin.js            ⭐ 皮肤名 / 素材槽位 / 底板与锚点 / 卡牌几何 / 时序（applySkinVars 灌 CSS 变量）
     ├─ config/lqip.js            ⚠️ 由 scripts/build_lqip.py 生成，不要手改
-    ├─ data/cards.js             22 张大阿卡纳文案 + ALL_CARD_IDS
+    ├─ data/cards.js             22 张大阿卡纳文案 + ALL_CARD_IDS。第二十一轮起每张多了
+    │                            `element` / `astrology` / `symbol` / `favor[2]` / `avoid[2]`
+    ├─ data/whispers.js          ⭐ 两侧低语文案池（`WHISPER_LINES`：idle 22 条 + ritual 6 条 + `WHISPER_STATIC_STEP`）。
+    │                            ⚠️ 导出名**不能**叫 `WHISPERS` —— `skin.js` 里那个是版式配置，重名会静默串用
     ├─ utils/shareCard.js        ⭐ 分享卡片图（Canvas 三层复刻牌面 + 竖版排版）
     ├─ utils/prefetch.js         ⭐ 牌面空闲预热（避免首次抽牌时插画还在下载）
     ├─ hooks/useDrawState.js     抽牌记录（unlimited / daily）+ readTodayRecord()（供首屏同步判断）
@@ -106,7 +122,8 @@ tarot-app/
     ├─ index.css                 主题变量 + 全部视觉样式（含「迎接动画 · 信封」一节）
     └─ components/               App / HeroStage / EnvelopeWelcome / MistLayer / ParticleField
                                  / CrystalOrb / CardReveal / CardFace / SmartImage
-                                 / CardGallery / ReadingPanel / ShareDialog / DevBar
+                                 / CardGallery（用户可开的「牌之图鉴」）/ CardDetail（完整解读覆盖层）
+                                 / WhisperTags（两侧漂浮低语）/ ReadingPanel / ShareDialog / DevBar
 ```
 
 
@@ -449,6 +466,8 @@ WebP 压缩后（牌面按实际显示 2 倍图 768×1123）：
 2. 本地日历回看页（需求里列为「后续可加」，抽牌记录已在 `localStorage`）
 3. 移动端专门出 9:16 竖构图主视觉（**不紧急**，实测竖屏构图已成立）
 4. 可选：`hero-figure` 人物层（做背景/人物/球的三层视差，纯锦上添花）
+5. 可选：**中文衬线子集字体**（当前 `@font-face` 数量为 **0**，全站靠系统字体栈兜底 ——
+   这是「美感」上目前最大的一处欠账；做法见 `NEXT_STEPS.md` §2 P2）
 
 ## 成本红线（重要）
 
@@ -479,6 +498,14 @@ PY="C:/Users/29923/.workbuddy/binaries/python/envs/default/Scripts/python.exe"
 "$PY" scripts/preview_hero.py                 # 不需要浏览器的合成预览（核对锚点）
 "$PY" scripts/contact_sheet.py                # 22 张原始插画总览
 "$PY" scripts/contact_sheet.py assets/previews assets/previews/contact-sheet-framed.png
+
+# ---- 视觉核验（无头、零依赖；参数与坑详见 NEXT_STEPS.md §3.1）----
+"$N" scripts/run-flows.mjs --list              # 列出全部 flow
+"$N" scripts/run-flows.mjs audit-title audit-draw audit-motion
+"$N" scripts/run-flows.mjs probe-whispers probe-gallery --w 1582 --h 804
+"$N" scripts/run-flows.mjs probe-whispers --w 504 --h 784   # 窄屏：低语整层应 display:none
+"$N" scripts/run-flows.mjs probe-panel-worst --reduced      # 逐张遍历 22 张，取最坏净空
+"$N" scripts/verify-orb3d.mjs                  # 3D 球四用例
 
 # ---- 打包（给需要看代码的人；交付主形态是线上链接）----
 "$PY" scripts/package_project.py              # 完整包（约 198 MB）
@@ -1151,3 +1178,67 @@ PY="C:/Users/29923/.workbuddy/binaries/python/envs/default/Scripts/python.exe"
   Windows 上 Chrome 窗口有**最小宽度** —— 实测 `--window-size=420,880` 得到的 `innerWidth` 是 **504**，
   移动端断点根本不会命中（DRAW_RITUAL_BRIEF §8.2 记的「移动 504×784」就是这个原因，不是笔误）。
   真手机视口必须走 CDP 的 `Emulation.setDeviceMetricsOverride`。
+
+- **2026-09-19（第二十一轮 · 内容与美感补齐：牌意加深 / 牌之图鉴 / 两侧漂浮低语）**
+  用户在本轮开头先**选定 3D 版本**（「现在网页的 3D 效果已经初步达成我想要效果了，暂时可以选定这个版本」），
+  然后给出本轮的活：「图鉴可以加但是先做的简单一些有就可以了，牌意加深也要做。还有就是**主页的两边太空**，
+  可以适当加一些**漂浮轮切的标签**，标签包含一些隐喻或是低语，加强背景女巫与用户的交互感。」
+  并明确划掉一项：「**正逆位先不用考虑**」。**零新增依赖、零积分消耗**。
+
+  **① 牌意加深（`src/data/cards.js`）——22 张各补 5 个字段**
+  - 新增 `element` / `astrology` / `symbol` / `favor[2]` / `avoid[2]`（原有 num/nameZh/nameEn/keywords/meaning/advice 全部保留）
+  - **`symbol` 的写法是有意定下的**：写「这个象征在说什么」，**刻意不去描述画面里画了什么** ——
+    否则读者会拿文字去核对插画，一有出入就变成「解释错了」。它是解读，不是图注
+  - 元素/星象按牌性给（愚人＝风·天王星、塔＝火·火星…），是塔罗通用体系，不引入流派分歧
+
+  **② 两侧漂浮低语（`src/components/WhisperTags.jsx` + `src/data/whispers.js`）**
+  - **分层拆解**（沿用本项目 `.hero-frame` / `.hero-plate` 的老办法）：`.whisper` 负责 `transform`（指针视差），
+    `.whisper__text` 负责 `transform`（漂浮关键帧）。**同一个元素上两个 transform 会互相覆盖**，必须拆成两层
+  - **相位用「周期摊到同侧条目」而不是固定累加**：`offset = rank*cycle/groupSize`
+    （`rank` = 同侧序号、`groupSize` = 同侧总数）。首版用 `staggerMs*index` 时踩了两个坑：
+    ① 右侧 5 条被全局序号拖到 **8.5s** 才出现；② 所有「亮」窗口都挤在周期的前 6.8s 里 → **齐亮齐灭**。
+    改完实测同屏条数稳在 **6–8** 条（周期 9.4s）
+  - `charging` 拍换池： rituals 短句（「别眨眼」「它在听」「呼——」），把「女巫在等你」这层关系接进仪式
+  - **几何契约**：`.whispers` 铺满视口但 `pointer-events: none`（否则吞掉水晶球点击）、
+    `z-index: 5`（**必须 > `.hero-hand` 的 3**，否则整层沉到主视觉后面；又低于标题 20 / 面板 50，不遮它们）、
+    每条锚在**本侧留白带**里（左内缘 ≤34% / 右内缘 ≥66% 视口宽）、`@media (max-width:900px)` **整层 `display:none`**
+  - `prefers-reduced-motion`：退化成**静态子集**（无旋转、无视差、无漂浮），画廊与详情照常可用
+  - 指针视差走 `requestAnimationFrame` 节流，且只在 `(hover: hover) and (pointer: fine)` 上挂
+
+  **③ 牌之图鉴 + 完整解读（`CardGallery.jsx` 改写 / 新增 `CardDetail.jsx`）**
+  - 图鉴从「开发者专用的牌面总览」改成**用户可开的 `role="dialog"` 覆盖层**：顶栏新增「牌之图鉴」入口，
+    去掉开发期那套「已接入插画 N 张」探测 UI 与脚注。22 格都是 `role="button"` + `tabIndex={0}`
+    （**不能用 `<button>`** —— `CardFace` 的根是 `div`），支持 Enter / Space
+  - **加深的内容全部住在新覆盖层里，面板一个像素都没变** —— 这是本轮最关键的一处架构判断：
+    解读面板是「bottom 锚定 + 内容撑高」，可用高度只有视口高的 **38.5%**（卡牌底边固定 61.5%），
+    实测净空桌面 39.2px / 竖屏最坏 10.7px，**再加几百字必然压到卡牌上**；
+    而面板一旦改成「限高 + 内部滚动」，底部主 CTA 会被挤出可视区（比压住 20px 更糟）。
+    所以分工是「**面板负责快读，详情层负责完整**」，两层互不挤占
+  - 图鉴与详情是**叠加**而非互斥（从图鉴点进详情，Esc 回到图鉴）→ 因此不需要「返回」按钮
+  - 面板侧只做无损补充：「完整解读」按钮 + 元素·星象那一行；宜/忌只在 `min-height: 820px` 的高视口显示（护住移动端净空）
+  - `DevBar` 去掉「牌面总览」按钮（职责已移交顶栏），`App.jsx` 里图鉴**不再受 `DEV_TOOLS` 门控**
+
+  **④ ⚠️ 本轮抓到的三个「只有真跑才暴露」的问题（都已根治）**
+  1. **右侧空了约 9 秒**：相位用全局 layout 序号累加 → 右半侧最晚一条要等 8.5s。改为同侧序号 + 缩短间隔
+  2. **低语齐亮齐灭**：固定延迟堆叠把「亮」的窗口全挤在周期前段。改为按同侧条目摊满一个周期
+  3. **探针自己的判据写错了**（`spreadSane`）：它断言同屏条数落在 3–9，但 reduced 下「10 条全亮」是**设计**
+     → reduced 一跑必然假失败。这条要专门记：**判据也得双向验** —— 只在非 reduced 下成立的门槛，
+     不能无差别地套到固定画面上
+  - 另修：`probe-gallery` 的插画选择器写成了 `.gallery__hit .card__art img`，
+    而 `SmartImage` 渲染出来的就是 `<img class="card__art">`（img **自己**带类，不是子元素）→ 恒报 false
+
+  **⑤ 验收（全部实测）**
+  - `probe-whispers`：宽屏 **10 条 / 穿透点击 / z-index 5 / 几何带全过 / 零相交 / 轮切 6·6·8·8·8·6（min 6 max 8）**，ALL_PASS；
+    **窄屏 504×688 整层 `display:none`**（隐式断言与显式断言双向都过）；`--reduced` 下 **10 条常亮且文案不变**、ALL_PASS
+  - `probe-gallery`：宽屏与窄屏**双视口 ALL_PASS** —— 入口命中测试为自身、22 格、插画 `naturalWidth 768`、
+    详情四块内容长度非空（象征 33 / 正位含义 56 / 今日建议 23）、宜忌各 2 条、
+    桌面两栏间隔 **44px**（恰为 `gap` 上限）、横向溢出 **0**、Esc 回到图鉴、再关回到场景
+  - `probe-panel-worst`（**逐张遍历 22 张牌**，不是随机抽一张）：`--reduced` 下两个桌面视口
+    `all22 + worstClearance + noKickerWrap + noActionWrap` 全绿，最坏净空 **约 40.2px / 44.2px**（门槛 8px），
+    重叠 0 —— 证明「多出来的面板行 + 加深内容」**没有破坏 38.5% 高度契约**
+  - 既有契约回归：`audit-draw` 6 视口净空 35–44px、重叠 0；`verify-orb3d` 不受影响
+  - `vite build` 通过；`src/` 内**没有新增任何运行时依赖**
+
+  **⑥ 本轮明确没做（用户裁定或列入待办）**
+  - **正逆位**（用户：「先不用考虑」）· **中文衬线子集字体**（当前 `@font-face` 数为 0，是美感上最大欠账，已列 P2）·
+    **Web Audio 合成音效**（充能/翻牌/揭晓，零素材成本，已列 P2）· 小阿卡纳 56 张（成本红线内，用户未点头）

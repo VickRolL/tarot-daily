@@ -7,11 +7,13 @@ import { markCardWarmed, prefetchCards } from './utils/prefetch'
 import HeroStage from './components/HeroStage'
 import MistLayer from './components/MistLayer'
 import ParticleField from './components/ParticleField'
+import WhisperTags from './components/WhisperTags'
 import CardReveal from './components/CardReveal'
 import ReadingPanel from './components/ReadingPanel'
 import ShareDialog from './components/ShareDialog'
 import DevBar from './components/DevBar'
 import CardGallery from './components/CardGallery'
+import CardDetail from './components/CardDetail'
 import EnvelopeWelcome from './components/EnvelopeWelcome'
 
 const todayLabel = (() => {
@@ -60,7 +62,14 @@ export default function App() {
   const [phase, setPhase] = useState(greet ? 'welcome' : 'entrance')
   const [currentCard, setCurrentCard] = useState(null)
   const [entranceDone, setEntranceDone] = useState(false)
+  /**
+   * 图鉴与「完整解读」是**两层**，可以叠着。
+   * 2026-09-20：图鉴从「仅开发环境」放开给用户（顶栏加了入口），
+   * 所以再也不需要 DEV_TOOLS 守卫；卡牌详情独立成一层，从图鉴或解读面板都能进来，
+   * 关掉详情就回到下面那层（图鉴还在），因此不需要「返回」按钮。
+   */
   const [galleryOpen, setGalleryOpen] = useState(false)
+  const [detailCard, setDetailCard] = useState(null)
   const [shareCard, setShareCard] = useState(null)
   const timers = useRef([])
 
@@ -205,10 +214,18 @@ export default function App() {
       <div className="scene__grain" aria-hidden="true" />
       <MistLayer intense={phase === 'charging'} />
       <ParticleField converge={phase === 'charging' ? 1 : 0} />
+      {/* 两侧低语：纯氛围层（aria-hidden），浓淡只看 phase —— 场景落定后浮现、
+          碰球时压低、牌出来就退场。定位与文案都在 config/skin.js + data/whispers.js。 */}
+      <WhisperTags phase={phase} />
 
       <header className="topbar">
         <span className="topbar__brand">TAROT · 日签</span>
-        <span>{todayLabel}</span>
+        <span className="topbar__right">
+          <button type="button" className="topbar__link" onClick={() => setGalleryOpen(true)}>
+            牌之图鉴
+          </button>
+          <span>{todayLabel}</span>
+        </span>
       </header>
 
       <motion.section
@@ -253,6 +270,7 @@ export default function App() {
           mode={mode}
           onAgain={handleAgain}
           onShare={() => setShareCard(currentCard)}
+          onDetail={() => setDetailCard(currentCard)}
         />
       )}
 
@@ -266,13 +284,17 @@ export default function App() {
           onModeChange={handleModeChange}
           onReset={handleAgain}
           hasRecord={!canDraw}
-          onOpenGallery={() => setGalleryOpen(true)}
           onReplayWelcome={handleReplayWelcome}
           welcomeEnabled={WELCOME.enabled}
         />
       )}
 
-      {DEV_TOOLS && galleryOpen && <CardGallery onClose={() => setGalleryOpen(false)} />}
+      {/* 图鉴对所有用户开放（入口在顶栏）。它只负责「选」，阅读交给下面那层。 */}
+      {galleryOpen && <CardGallery onClose={() => setGalleryOpen(false)} onPick={setDetailCard} />}
+
+      {/* 完整解读：从图鉴点进来、或从解读面板的「完整解读」进来，都是这一层。
+          叠在图鉴上面，关掉即回到图鉴，所以不需要返回按钮。 */}
+      {detailCard && <CardDetail card={detailCard} onClose={() => setDetailCard(null)} />}
 
       {!entranceDone && (
         <motion.div
