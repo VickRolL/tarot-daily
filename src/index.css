@@ -300,13 +300,19 @@ body {
 .whisper {
   position: absolute;
   font-family: var(--font-display);
-  font-size: clamp(11px, 0.86vw, 14px);
-  letter-spacing: 0.18em;
+  /* 2026-09-20 用户反馈「低语也太小」：11→14px 的区间改成 13→18px（+~22%）。
+     ⚠️ 字号**直接决定这条文案有多宽**，而两侧低语的横向空间是有硬上限的
+     （左内缘 ≤34% / 右内缘 ≥66% 视口宽，中间那条带要留给标题与牌面）。
+     所以字号与 skin.js 里的 WHISPERS.layout[].x 是一对，必须一起调、一起重跑
+     `probe-whispers`。这里把 letter-spacing 从 0.18em 收到 0.15em，
+     把放大吃掉的那点宽度找回来一部分。 */
+  font-size: clamp(13px, 1.05vw, 18px);
+  letter-spacing: 0.15em;
   line-height: 1.5;
   /* 换字时宽度会变，nowrap + 收缩贴合宽度保证锚点那一侧不动，不会左右抖 */
   white-space: nowrap;
-  color: rgba(201, 180, 255, 0.72);
-  text-shadow: 0 0 20px rgba(124, 92, 214, 0.5);
+  color: rgba(205, 186, 255, 0.78);
+  text-shadow: 0 0 26px rgba(124, 92, 214, 0.55);
   opacity: 0;
   /* 位移量 = 指针归一化坐标 × 本条深度 × --wpar（由组件从 skin.js 灌入，
      避免「配置里一个数、CSS 里另一个数」） */
@@ -806,6 +812,83 @@ body {
   border-bottom-color: rgba(201, 180, 255, 0.55);
 }
 
+/* 日期（2026-09-20 才给的类名）。**必须是一个能单独选中的类** ——
+   窄屏要整段藏掉它给居中标题腾空隙（见 ≤640px 那条媒体查询）。 */
+.topbar__date {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ============================ 音效开关 ============================
+   2026-09-20 第二十二轮。**为什么不在顶栏、也不在右下角**：
+
+   · 不进顶栏：顶栏右侧每多一个元素，那组的左边缘就往中间推一点；而标题居中、
+     又和顶栏同处一条 y 带（视口一矮必然重叠），可用横向空档就是标题字号的上限
+     —— 顶栏里每多一个字符，标题就得小一点。这个按钮不占用那份预算。
+   · 不放右下角：解读面板是 bottom 锚定 + z-index 50，右下角正好在面板身上
+     （面板 z-index 50 > 本按钮 35）→ 抽完牌它就**沉到面板背后**，看不见也点不到。
+
+   最终放在**品牌下方、左上角**：与顶栏同一个 28px 左边距（视觉上属于顶栏这一族），
+   而 y=74 在顶栏内容（22–45）之下、两侧低语（最低一条 y=19% ≈ 134px，
+   见 skin.js 的 WHISPERS.layout）之上 —— 三个都不碰，且永远不在面板的覆盖范围里。
+   窄屏低语整层隐藏，这个位置更空。 */
+.sound {
+  position: fixed;
+  left: 28px;
+  top: 74px;
+  z-index: 35;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--font-body);
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  color: var(--text-faint);
+  background: rgba(10, 7, 20, 0.42);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 5px 12px 5px 10px;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  transition: color 0.25s, border-color 0.25s, background 0.25s;
+}
+
+.sound:hover,
+.sound:focus-visible {
+  color: var(--text-dim);
+  border-color: rgba(201, 180, 255, 0.42);
+}
+
+/* 开的时候给一点暖色 —— 只用文字「开/关」在这么小的字号下不够显眼 */
+.sound[data-on='true'] {
+  color: var(--gold);
+  border-color: rgba(214, 186, 122, 0.4);
+}
+
+.sound__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.35;
+  transition: opacity 0.25s, box-shadow 0.25s;
+}
+
+.sound[data-on='true'] .sound__dot {
+  opacity: 1;
+  box-shadow: 0 0 8px currentColor;
+}
+
+@media (max-width: 640px) {
+  /* 窄屏顶栏的 28px 左右内边距没有覆盖，这里也别动 left —— 保持与品牌同一条竖线 */
+  .sound {
+    top: 68px;
+    padding: 4px 10px;
+    font-size: 10px;
+    gap: 5px;
+  }
+}
+
 /* 标题带（「今夜一签」+ 副标题）
    --------------------------------------------------------------------------
    2026-09-18 修：标题曾被抽出的卡牌盖住 —— 实测桌面端标题被盖 42.9px、
@@ -834,9 +917,24 @@ body {
 
 .headline__title {
   font-family: var(--font-display);
-  font-size: clamp(24px, 3vw, 36px);
+  /* 2026-09-20 用户反馈「标题太小」。原来上限锁死在 36px（3vw 在 1200px 以上就顶到上限了），
+     所以**在桌面端不管窗口多宽，标题永远 36px** —— 这就是「太小」的根源。
+
+     新写法把字号挂到 vw 与「视口高度」上取小。vh 那一项不是拍脑袋的系数，
+     是从几何契约**反推**出来的：标题带从卡牌顶边往上锚定，往上长，天花板是视口顶。
+       卡牌顶边  = 0.385h − min(0.23h, 210px)
+       标题带高  = 1.06·F（行高）+ 7px（与副标题的间距）+ 18px（副标题）
+       字墨迹还会比行盒再往上溢约 0.19·F（实测 42.5px 时溢出 8px）
+       要求「墨迹顶边 ≥ 4px」→
+         F ≤ (0.155h − 49 − 4) / 1.25  =  0.124h − 42.4   …（h < 913 时）
+     所以 vh 项写成 `calc(12.4vh - 42.4px)`。
+     巧合但好用的性质：h ≥ 913 后卡高被 210px 的上限咬住，同一公式在 h=913 处
+     算得 70.9px、而高视口的正确上限是 70.8px —— 两条曲线在这里**恰好接上**，
+     所以不需要再为高视口写第二条规则（何况 54px 的上限先到了）。
+
+     实测这一项救了 1366×640 / 1280×600 这类窗口：只按 vw 放大，标题会被顶出屏幕上边缘。 */
+  font-size: clamp(26px, min(3.6vw, calc(12.4vh - 42.4px)), 54px);
   letter-spacing: 0.42em;
-  /* 上下间距收紧（原来 margin-bottom 12px），好让标题带塞进 topbar 与卡牌之间 */
   margin: 0 0 7px;
   text-indent: 0.42em;
   color: var(--text);
@@ -845,8 +943,11 @@ body {
 }
 
 .headline__sub {
-  font-size: 13px;
-  letter-spacing: 0.26em;
+  /* 13px → 18px。字号跟着标题一起长，否则「标题大了、副标题还是小字」会更失衡。
+     letter-spacing 从 0.26em 收到 0.22em：字号变大后原来的字距会让整行过长，
+     而这一行在窄屏上是**贴着顶栏走的**（见 .topbar__date 那条注释）。 */
+  font-size: clamp(15px, min(1.15vw, 2vh), 18px);
+  letter-spacing: 0.22em;
   color: var(--text-dim);
   margin: 0;
   line-height: 1.2;
@@ -1869,12 +1970,26 @@ body {
      竖屏不再需要单独覆盖 top —— 那会让它重新从顶部往下排、撞上卡牌。
      这里只收紧字号与间距，好塞进顶栏与卡牌之间的窄带。 */
   .headline__title {
-    font-size: clamp(22px, 6.4vw, 30px);
+    /* 22–30px → 26–40px。为什么上限只敢给 40：竖屏顶栏三段文字
+       （品牌 116px + 图鉴 59px + 日期 125px + 两道 18px 间隙 = 约 336px）
+       已经吃掉内容区 448px 的大半，而标题居中、还必须与顶栏同处一条 y 带
+       （504×688 下顶栏底 67、卡牌顶 106，中间只有 39px —— 装不下标题+副标题）。
+       实测原字号（30px）的「签」与「牌之图鉴」已经**二维相交**。
+       真正腾出空间的是下面那条「藏掉日期」，字号上限是按腾完之后的空档定的。
+
+       vh 项与桌面同源（`0.124h − 38.4`，副标题窄屏是 15px、间距 6px，故常数更小），
+       窄屏基本被 7.4vw 先咬住，这一项是给「窄而高」的窗口兜底的。 */
+    font-size: clamp(26px, min(7.4vw, calc(12.4vh - 38.4px)), 40px);
     margin-bottom: 6px;
   }
   .headline__sub {
-    font-size: 11px;
+    font-size: 15px;
     letter-spacing: 0.2em;
+  }
+  /* 窄屏顶栏放不下三段文字。日期是其中信息量最低的一项
+     （今天抽到什么牌才是重点），藏掉它给居中标题腾出约 145px 的空档。 */
+  .topbar__date {
+    display: none;
   }
   .panel {
     padding-bottom: 24px;

@@ -14,7 +14,9 @@ import ShareDialog from './components/ShareDialog'
 import DevBar from './components/DevBar'
 import CardGallery from './components/CardGallery'
 import CardDetail from './components/CardDetail'
+import SoundToggle from './components/SoundToggle'
 import EnvelopeWelcome from './components/EnvelopeWelcome'
+import * as sfx from './audio/sfx'
 
 const todayLabel = (() => {
   const d = new Date()
@@ -138,6 +140,25 @@ export default function App() {
     markCardWarmed(card.id)
     // 这一张已经渲染过了，顺手再补几张没下过的
     prefetchCards(ALL_CARD_IDS, 3)
+
+    /* 音效（2026-09-20 第二十二轮）——
+       ⚠️ 这一刻的调用栈**就是用户手指点水晶球的手势**，所以这里是唯一
+       能让 AudioContext 合法启动的时机（浏览器不允许在非手势里起 ctx）。
+       必须**无条件先 unlock**：reduced 路径下蓄势音与爆闪音都被跳过，
+       只有揭晓铃会响，而它是从 `panelAt` 的定时器里触发的 —— 那种调用栈
+       早就脱离手势了，等那一刻才建 ctx 会被浏览器挂成 suspended（静默无声）。
+       关掉音效的用户不建 ctx（`isSoundOn()` 为否），不浪费一个音频图。
+       音效的**时刻全部取自同一张节拍表**，不额外写死毫秒数：
+       蓄势音的长度 = chargeDone，翻牌音挂在 flipAt，揭晓铃挂在 panelAt。 */
+    if (sfx.isSoundOn()) sfx.unlock()
+    if (sfx.isSoundOn() && !reduced) sfx.charge(b.chargeDone)
+    pushTimer(() => {
+      if (!reduced) sfx.burst()
+    }, b.chargeDone)
+    pushTimer(() => {
+      if (!reduced) sfx.flip()
+    }, b.flipAt)
+
     /* ① 蓄势：球充能，**牌此时还不挂载** —— 这一段是期盼感的来源。
        所以 currentCard 的挂载推迟到 chargeDone，而不是和点击同一帧。 */
     setPhase('charging')
@@ -145,8 +166,13 @@ export default function App() {
       setCurrentCard(card)
       setPhase('drawing')
     }, b.chargeDone)
-    pushTimer(() => setPhase('revealed'), b.panelAt)
-  }, [phase, save, beats])
+    pushTimer(() => {
+      setPhase('revealed')
+      /* 减少动效时整场仪式压到约 30ms，四个音会糊成一坨 ——
+         只留揭晓那一声（它是信息性的，其余三个是氛围） */
+      sfx.reveal()
+    }, b.panelAt)
+  }, [phase, save, beats, reduced])
 
   const handleAgain = useCallback(() => {
     clearTimers()
@@ -224,9 +250,13 @@ export default function App() {
           <button type="button" className="topbar__link" onClick={() => setGalleryOpen(true)}>
             牌之图鉴
           </button>
-          <span>{todayLabel}</span>
+          <span className="topbar__date">{todayLabel}</span>
         </span>
       </header>
+
+      {/* 音效开关：放右下角，**不进顶栏** —— 顶栏右侧每多一个字符，
+          居中标题的可用横向空档就少一截（标题与顶栏同处一条 y 带）。 */}
+      <SoundToggle />
 
       <motion.section
         className="headline"
