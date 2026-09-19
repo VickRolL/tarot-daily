@@ -22,14 +22,23 @@ const hit2 = (a, b) =>
 
 const out = { viewport: [innerWidth, innerHeight] }
 
-/* 先抽一张牌，把「标题 vs 卡牌」的冲突暴露出来 */
+/* 先抽一张牌，把「标题 vs 卡牌」的冲突暴露出来。
+   ⚠️ 必须等到 **revealed**：副标题在 charging / drawing 两拍是被**刻意清空**的
+   （渲染成 nbsp 占位，见 App.jsx 的 headlineSub），那时量到的 `.headline__sub`
+   宽度只有 6.7px、文案是空串 —— 拿它去算「副标题与牌面的净空」全是假的。 */
 const orb = document.querySelector('.orb')
 if (orb) orb.click()
-await sleep(2800)
+const tWait = Date.now()
+while (Date.now() - tWait < 12000) {
+  if (document.querySelector('.scene')?.dataset.phase === 'revealed') break
+  await sleep(120)
+}
+await sleep(500)
 
 const headline = document.querySelector('.headline')
 const title = document.querySelector('.headline__title')
 const sub = document.querySelector('.headline__sub')
+const rule = document.querySelector('.headline__rule')
 const card = document.querySelector('.card')
 const topbar = document.querySelector('.topbar')
 
@@ -38,6 +47,7 @@ const R = {
   headline: rect(headline),
   title: rect(title),
   sub: rect(sub),
+  rule: rect(rule),
   card: rect(card)
 }
 out.rects = R
@@ -110,6 +120,42 @@ out.band.titleRoomPx = (() => {
 out.overlapTitleCard = overlap(R.title, R.card)
 out.overlapSubCard = overlap(R.sub, R.card)
 out.overlapHeadlineCard = overlap(R.headline, R.card)
+
+/* 副标题底边 → 牌面顶边的净空。这正是 2026-09-20 用户说「卡牌有点靠上、
+   与副标题有点重叠」的那个距离，也是**唯一由 TITLE_GAP 决定**的量
+   （挪卡牌、改卡高都只是让它两一起平移，间距恒等于 gap）。 */
+out.gaps = {
+  subToCard: R.sub && R.card ? px(R.card.y - R.sub.bottom) : null,
+  headlineTop: R.headline ? px(R.headline.y) : null,
+  cardTopPct: R.card ? px((R.card.y / innerHeight) * 100) : null,
+  cardBottomPct: R.card ? px((R.card.bottom / innerHeight) * 100) : null
+}
+/* 门槛 30：TITLE_GAP 是 38，留 8px 容差（文字墨迹会比行盒再高一点） */
+out.PASS_subCardGap = out.gaps.subToCard !== null && out.gaps.subToCard >= 30
+/* 标题带整块不许被顶出屏幕上边缘（它是往上锚定的，字越大越危险） */
+out.PASS_titleOnScreen = out.gaps.headlineTop !== null && out.gaps.headlineTop >= 4
+/* 标题 / 副标题的**墨迹**不许与顶栏那几段文字二维相交。
+   2026-09-20 抓到的实例：窄屏把上限提到 42px 后，「今」的左边缘 141.5
+   撞上「TAROT · 日签」的右边缘 143.9（相交 2.4px）—— 只看「有没有伸进顶栏那条带」
+   是抓不到的，必须按二维算。 */
+out.PASS_noTopbarHit = out.band.titleHitsTopbar.length === 0 && out.band.subHitsTopbar.length === 0
+
+/* 碑铭线：既要在副标题下方（不能压字），又不能落到牌面顶边上。
+   它落在 TITLE_GAP 那 38px 里，是全站唯一「在标题带与牌面之间」的东西，
+   所以两条都要查。 */
+out.rule = R.rule
+  ? {
+      ...R.rule,
+      gapBelowSub: R.sub ? px(R.rule.y - R.sub.bottom) : null,
+      gapToCard: R.card ? px(R.card.y - R.rule.bottom) : null
+    }
+  : null
+out.PASS_rulePlaced =
+  !!out.rule &&
+  out.rule.gapBelowSub !== null &&
+  out.rule.gapBelowSub >= 2 &&
+  out.rule.gapToCard !== null &&
+  out.rule.gapToCard >= 8
 
 /* 层级：谁压在谁上面 */
 const z = (sel) => {

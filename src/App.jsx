@@ -17,6 +17,7 @@ import CardDetail from './components/CardDetail'
 import SoundToggle from './components/SoundToggle'
 import EnvelopeWelcome from './components/EnvelopeWelcome'
 import * as sfx from './audio/sfx'
+import * as ambient from './audio/ambient'
 
 const todayLabel = (() => {
   const d = new Date()
@@ -141,16 +142,26 @@ export default function App() {
     // 这一张已经渲染过了，顺手再补几张没下过的
     prefetchCards(ALL_CARD_IDS, 3)
 
-    /* 音效（2026-09-20 第二十二轮）——
+    /* 声音（2026-09-20 第二十二轮接入，第二十三轮重做音效 + 加环境音）——
        ⚠️ 这一刻的调用栈**就是用户手指点水晶球的手势**，所以这里是唯一
        能让 AudioContext 合法启动的时机（浏览器不允许在非手势里起 ctx）。
-       必须**无条件先 unlock**：reduced 路径下蓄势音与爆闪音都被跳过，
-       只有揭晓铃会响，而它是从 `panelAt` 的定时器里触发的 —— 那种调用栈
+       必须**无条件先 unlock**：reduced 路径下蓄势音与释放音都被跳过，
+       只有揭示钵会响，而它是从 `panelAt` 的定时器里触发的 —— 那种调用栈
        早就脱离手势了，等那一刻才建 ctx 会被浏览器挂成 suspended（静默无声）。
-       关掉音效的用户不建 ctx（`isSoundOn()` 为否），不浪费一个音频图。
-       音效的**时刻全部取自同一张节拍表**，不额外写死毫秒数：
-       蓄势音的长度 = chargeDone，翻牌音挂在 flipAt，揭晓铃挂在 panelAt。 */
-    if (sfx.isSoundOn()) sfx.unlock()
+       关掉声音的用户不建 ctx（`isSoundOn()` 为否），不浪费一个音频图。
+       音效的时刻**全部取自同一张节拍表**，不额外写死毫秒数：
+       蓄势音的长度 = chargeDone，翻牌音挂在 flipAt，揭示钵挂在 panelAt。
+
+       ⚠️ 这里还要补一次 `startAmbient()`：用户可能上次开着声音、这次直接点球
+       抽牌（全程没碰过开关），那条路径上环境音还没起来。
+       BGM 同时**让位**（duck 到 35%）—— 接下来 5.6 秒是音效的主场，
+       让两者一起响会互相糊住。牌落定后再慢慢把它托回来。 */
+    if (sfx.isSoundOn()) {
+      sfx.unlock()
+      ambient.startAmbient()
+      ambient.duckAmbient(true)
+      pushTimer(() => ambient.duckAmbient(false), b.panelAt + 1400)
+    }
     if (sfx.isSoundOn() && !reduced) sfx.charge(b.chargeDone)
     pushTimer(() => {
       if (!reduced) sfx.burst()
@@ -272,6 +283,12 @@ export default function App() {
         {/* 空副标题用 nbsp 占住那一行：.headline 是 bottom 锚定的，
             文字清空会让整块高度缩短、标题往下跳 ~23px（点击瞬间的抽搐） */}
         <p className="headline__sub">{headlineSub || '\u00a0'}</p>
+        {/* 碑铭线（第二十三轮）：罗马碑刻的构成 —— 主铭文之下压一道短横线。
+            做成**真实元素**而不是伪元素，理由是探针：伪元素没有
+            `getBoundingClientRect()`，量不了位置，也就断言不了
+            「它有没有越到卡牌上 / 有没有顶到顶栏」。而这条线正落在
+            标题带与牌面之间那 38px 里，是必须能测的。 */}
+        <span className="headline__rule" aria-hidden="true" />
       </motion.section>
 
       {phase === 'drawing' && (

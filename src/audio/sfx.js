@@ -1,292 +1,268 @@
 /**
- * 音效合成（2026-09-20 第二十二轮）
+ * 音效（2026-09-20 第二十三轮 · 全部重新设计）
  * ==========================================================================
- * 为什么是「合成」而不是「音效文件」：
- *   ① 本项目有一条硬线 —— **美术/音频素材零新增**（出图要花积分，音频素材要外链或入库）；
- *   ② 这三个音都是**噪声与正弦的短包络**（嗡 / 咔 / 叮），Web Audio 现场合成完全够用，
- *      一段 `OscillatorNode` + `BiquadFilter` 比一个 mp3 更小、更可控、也不会有加载态；
- *   ③ 合成的声音可以**跟着节拍表参数化** —— 蓄势音的长度直接取 `chargeDone`，
- *      动画改时长音效自动跟着改，不会出现「画面 1.2s、音效 0.6s」的错位。
+ * 第二十二轮的四个音被用户逐个否掉了，原话：
+ *   「点击之后牌出来前的声音和汽车加速的音效很像」
+ *   「牌出来的声音很像拍了一下鼓」「牌翻转也是鼓」「牌展示的叮一声也不符合体感」
  *
- * ── 三条不可让步的规矩 ──────────────────────────────────────────────────
- *   ① **默认关闭**。不是「等用户点一次就永久开」——是初始 state 就是关，
- *      用户必须显式点一下开关。理由一半是礼貌（不打招呼就出声很冒犯），
- *      一半是浏览器策略（没有用户手势，AudioContext 建出来就是 suspended）。
- *   ② **AudioContext 只在用户手势里创建/恢复**。`unlock()` 必须在 click/keydown
- *      的调用栈里跑，否则 Chrome 会把它挂成 suspended，后面所有声音都是哑的
- *      —— 而且**不报错**，只是安静地不出声（这类 bug 最难查）。
- *   ③ **所有增益都用包络**，不许直接 `gain.value = x` 硬切。
- *      硬切会在波形中间产生台阶 → 听感上是「啪」的爆音。
+ * 复盘：这不是音量或音色没调好，是**配方选错了**。
+ *   上一版四个音里有三个是「**有明确音高 + 快起音 + 低频能量集中**」：
+ *       蓄势  96→148Hz 上行扫频 + 低通 260→900Hz  → 引擎 / 油门
+ *       释放  128→54Hz 正弦，attack 4ms            → 底鼓
+ *       翻牌  420→300Hz 正弦，attack 3ms           → 手鼓 / 木鱼
+ *       揭晓  659Hz 基音，attack 12ms              → 电子风铃
+ *   人耳对这三件事的归类是**又快又硬的机械/打击事件**，
+ *   而塔罗这一幕要的是**气、雾、丝绸、水晶与厅堂**：慢起音、无音高、全频稀薄。
  *
- * ── 怎么验（人耳之外）──────────────────────────────────────────────────
- *   Web Audio 在无头环境里没法「听」，但可以验**结构性事实**：
- *   开关状态是否持久化、`AudioContext` 是否真的被建出来且 `state === 'running'`、
- *   每次触发是否真的连上了节点。见 `scripts/flows/probe-sfx.js`。
+ * 这一版给四个音重新定了配方，判据只有一条，写在这里供后来者守：
+ *   **凡是在 50ms 内把能量堆到 200Hz 以下的写法，一律不许出现。**
+ *   （那条 128→54Hz 的包络正是「鼓」的全部秘密。）
+ *
+ * 另一个共性问题：合成音「廉价」往往不是音色问题，是**没有空间**。
+ * 干声贴着耳朵，像玩具。所以这一版所有音都经 `send(..., wet)` 送进
+ * `engine.js` 里程序生成的厅堂混响，让声音有地方待着。
+ *
+ * ── 四个音现在的配方 ────────────────────────────────────────────────
+ *   ① charge 「屏息」  55 / 55.35Hz 双失谐 drone（**不扫频**）+ 两层气声缓慢拱起
+ *                     靠**音量拱形**表达积蓄，不靠升调 —— 升调就是加速
+ *   ② burst  「雾散」  高通气声 + 低频气层 + 一声极轻的低音底座
+ *                     完全没有 200Hz 以下的瞬态；整段没有一个陡沿
+ *   ③ flip   「丝绢」  两层带通噪声错开 28ms + 一层起绒高频；**零振荡器**
+ *                     attack 从 3ms 放宽到 16ms —— 5ms 内到峰值一律被听成「敲」
+ *   ④ reveal 「颂钵」  196Hz 基音 + 失谐副基音 + 钟形非谐泛音(2.76/5.40/8.93)
+ *                     attack 放宽到 180ms，余韵 6s —— 是「嗡起来」不是「叮一下」
  */
 
-const STORE_KEY = 'tarot.sound'
+import { air, audio, isSoundOn, tone } from './engine'
 
-/** 主音量。刻意压得很低 —— 这是氛围音，不是游戏音效 */
-const MASTER_GAIN = 0.34
+/* ⚠️ 转发导出必须显式写出每个名字，而且**只能走 `export ... from`**。
+   踩过一次：先在 `import` 里漏了 `muteAll`、却在 `export { muteAll }` 里写了它，
+   浏览器直接抛 `Export 'muteAll' is not defined in module` —— 而且是**求值期**抛，
+   表现是整站白屏、控制台只有这一条，不看就完全猜不到。
+   `export ... from` 不创建局部绑定，所以和上面那个 `import` 同名也不会冲突。 */
+export { isSoundOn, muteAll, readSoundPref, setSoundOn, unlock, unmuteAll } from './engine'
 
-let ctx = null
-let master = null
-let noiseBuf = null
-let enabled = false
-
-/* ---------------------------------------------------------------- 状态 */
-
-export const isSoundOn = () => enabled
-
-export function readSoundPref() {
-  try {
-    return window.localStorage.getItem(STORE_KEY) === 'on'
-  } catch {
-    return false
-  }
-}
-
-export function writeSoundPref(on) {
-  try {
-    window.localStorage.setItem(STORE_KEY, on ? 'on' : 'off')
-  } catch {
-    /* 隐私模式下写不进去也没关系，本次会话照常生效 */
-  }
-}
-
-/* ---------------------------------------------------------------- 引擎 */
+/* ---------------------------------------------------------------- 四个音 */
 
 /**
- * 拿到（必要时创建）AudioContext。
- * ⚠️ 只能在用户手势的调用栈里调 —— 见文件头第 ② 条。
- */
-function engine() {
-  const AC = typeof window !== 'undefined' && (window.AudioContext || window.webkitAudioContext)
-  if (!AC) return null
-  if (!ctx) {
-    ctx = new AC()
-    master = ctx.createGain()
-    master.gain.value = MASTER_GAIN
-    master.connect(ctx.destination)
-  }
-  /* iOS / Chrome 会在后台标签页把 ctx 挂起，回到前台不自动恢复 —— 每次触发都探一下 */
-  if (ctx.state === 'suspended') ctx.resume()
-  return ctx
-}
-
-/** 白噪声缓冲（只生成一次，1s 足够所有短音复用） */
-function noise(c) {
-  if (!noiseBuf) {
-    noiseBuf = c.createBuffer(1, Math.floor(c.sampleRate), c.sampleRate)
-    const d = noiseBuf.getChannelData(0)
-    for (let i = 0; i < d.length; i += 1) d[i] = Math.random() * 2 - 1
-  }
-  return noiseBuf
-}
-
-/**
- * 在用户手势里调一次：把 AudioContext 建出来并跑起来（不发声）。
- * ⚠️ **不要**在模块初始化 / 组件渲染里调它 —— Chrome 会打印
- * 「The AudioContext was not allowed to start」并把 ctx 挂在 suspended。
- * 真正的创建时机有两个，都在手势里：① 用户点音效开关；② 用户点水晶球抽牌。
- */
-export function unlock() {
-  const c = engine()
-  return !!c && c.state === 'running'
-}
-
-/**
- * 切换开关。**只改标志位与持久化，不碰 AudioContext** ——
- * 这样「上次开着、这次直接点球抽牌」这条路径也是在水晶球的点击手势里建 ctx 的，
- * 控制台不会留下自动播放的告警。
- */
-export function setSoundOn(on) {
-  enabled = !!on
-  writeSoundPref(enabled)
-  return enabled
-}
-
-/* ---------------------------------------------------------------- 包络工具 */
-
-/**
- * 一次「起 → 峰 → 落」的增益包络，写进给定的 GainNode。
- * ⚠️ 指数斜坡**不能**落到 0（数学上到不了，Web Audio 会直接拒绝或静默出问题），
- * 所以末尾用 0.0001 而不是 0。这是新手最常见的爆音来源。
- */
-function env(g, t0, peak, attack, hold, release) {
-  const p = Math.max(peak, 0.0001)
-  g.gain.setValueAtTime(0.0001, t0)
-  g.gain.linearRampToValueAtTime(p, t0 + attack)
-  g.gain.setValueAtTime(p, t0 + attack + hold)
-  g.gain.exponentialRampToValueAtTime(0.0001, t0 + attack + hold + release)
-}
-
-/** 正弦/三角振荡器 + 可选扫频，接到 master */
-function tone(c, { type = 'sine', from, to, t0, dur, peak, attack = 0.02, hold = 0.1, release = 0.3, filter }) {
-  const osc = c.createOscillator()
-  const g = c.createGain()
-  osc.type = type
-  osc.frequency.setValueAtTime(from, t0)
-  if (to && to !== from) osc.frequency.linearRampToValueAtTime(to, t0 + dur)
-  env(g, t0, peak, attack, hold, release)
-  let head = osc
-  if (filter) {
-    const f = c.createBiquadFilter()
-    f.type = filter.type
-    f.frequency.setValueAtTime(filter.from, t0)
-    if (filter.to && filter.to !== filter.from) f.frequency.linearRampToValueAtTime(filter.to, t0 + dur)
-    f.Q.value = filter.q ?? 1
-    osc.connect(f)
-    head = f
-  }
-  head.connect(g)
-  g.connect(master)
-  osc.start(t0)
-  osc.stop(t0 + dur + attack + hold + release + 0.05)
-  return osc
-}
-
-/* ---------------------------------------------------------------- 三个音 */
-
-/**
- * ① 蓄势「嗡」—— 低频慢起，音量随充能一起拱上去，末尾被爆闪切断。
- * `durMs` 直接取节拍表的 chargeDone，所以改了蓄势拍长度，音效自动对齐。
+ * ① 蓄势「屏息」—— 对应「点击 → 牌还没出来」那一段（长度 = 节拍表的 chargeDone）。
+ *
+ * 用户说上一版「像汽车加速」。根因是两条**上行扫频**：96→148Hz 的主音、
+ * 193→291Hz 的陪音，再叠一个低通 260→900Hz 的开口 —— 这一整套正好是
+ * 引擎从怠速拉转速的声音画像。
+ *
+ * 现在改成**频率一个都不动**：
+ *   · 两个只差 0.35Hz 的低音（55 / 55.35）叠出**缓慢拍频**（约 0.35 次/秒），
+ *     听感是「隐隐地起伏」，这是「活着、在攒劲」的来源 —— 比扫频高级得多；
+ *   · 两层气声（中频 480Hz / 高频 6.5kHz）从几乎听不见慢慢浮上来，
+ *     像是**有人在远处吸气**；
+ *   · 全程只有音量在动，没有音高在动。所以它不会再被读成任何机器。
+ *
+ * 长度直接取节拍表的 `chargeDone`：改动画时长，音效自动跟着对齐。
  */
 export function charge(durMs = 1000) {
-  if (!enabled) return false
-  const c = engine()
-  if (!c || durMs < 120) return false
-  const t0 = c.currentTime + 0.01
+  if (!isSoundOn()) return false
+  const c = audio()
+  if (!c || durMs < 200) return false
+  const t0 = c.currentTime + 0.02
   const dur = durMs / 1000
 
-  /* 两个略微失谐的低音叠出「厚度」，扫频让它有「往上攒」的动势 */
-  tone(c, {
-    type: 'triangle',
-    from: 96,
-    to: 148,
+  /* 双失谐低音：只差 0.35Hz → 0.35 次/秒的拍频，是「呼吸」不是「加速」 */
+  tone(c, { type: 'sine', from: 55, t0, dur, peak: 0.3, attack: dur * 0.86, hold: 0, release: 0.18, wet: 0.32 })
+  tone(c, { type: 'sine', from: 55.35, t0, dur, peak: 0.26, attack: dur * 0.9, hold: 0, release: 0.18, wet: 0.32 })
+
+  /* 八度上的一条细线：让笔记本小喇叭也能听到「底」，不然 55Hz 直接消失了 */
+  tone(c, { type: 'sine', from: 110, t0, dur, peak: 0.11, attack: dur * 0.8, hold: 0, release: 0.16, wet: 0.3 })
+
+  /* 吸气：中频气声。带通不是低通 —— 低通会把气声压成一团闷响（又回到鼓） */
+  air(c, {
     t0,
     dur,
-    peak: 0.5,
-    attack: dur * 0.72,
+    peak: 0.13,
+    attack: dur * 0.9,
     hold: 0,
-    release: 0.1,
-    filter: { type: 'lowpass', from: 260, to: 900, q: 4 }
+    release: 0.22,
+    filter: { type: 'bandpass', from: 480, q: 0.55 },
+    wet: 0.42
   })
-  tone(c, {
-    type: 'sine',
-    from: 193,
-    to: 291,
+
+  /* 极轻的高频空气层：给「雾」一点颗粒，也让整体不至于发闷 */
+  air(c, {
     t0,
     dur,
-    peak: 0.22,
-    attack: dur * 0.8,
+    peak: 0.024,
+    attack: dur * 0.85,
     hold: 0,
-    release: 0.08
+    release: 0.3,
+    filter: { type: 'highpass', from: 6500, q: 0.5 },
+    wet: 0.5
   })
   return true
 }
 
 /**
- * ② 释放「啪 / 唰」—— 噪声脉冲 + 一记低频闷响。
- * 对应爆闪那一拍：要短、要有冲击，但不能刺耳（带通卡在 1.1k）。
+ * ② 释放「雾散」—— 对应爆闪那一拍。
+ *
+ * 用户说上一版「像拍了一下鼓」。根因是那条 128→54Hz、attack 4ms 的正弦：
+ * 快速下滑的低频正弦 = 底鼓的标准做法，一个不差。
+ *
+ * 现在把 **200Hz 以下的所有瞬态全部删掉**，只留气：
+ *   · 高通气声（800Hz 起）—— 「呼」的一声散开，没有低频就没有「捶」的感觉；
+ *   · 一层低频**气**（带通 260Hz，慢起 100ms）补厚度 —— 注意是气不是正弦，
+ *     气声没有明确音高，所以只添体积、不添「鼓皮」；
+ *   · 一声极轻的低音底座（165Hz，起音 200ms、拖 2.5s）把这一拍「托住」，
+ *     它慢到不像敲击，更像房间里的一口回响。
  */
 export function burst() {
-  if (!enabled) return false
-  const c = engine()
+  if (!isSoundOn()) return false
+  const c = audio()
   if (!c) return false
   const t0 = c.currentTime + 0.005
 
-  const src = c.createBufferSource()
-  src.buffer = noise(c)
-  const bp = c.createBiquadFilter()
-  bp.type = 'bandpass'
-  bp.frequency.setValueAtTime(1100, t0)
-  bp.frequency.exponentialRampToValueAtTime(420, t0 + 0.34)
-  bp.Q.value = 0.9
-  const g = c.createGain()
-  env(g, t0, 0.5, 0.006, 0.02, 0.3)
-  src.connect(bp)
-  bp.connect(g)
-  g.connect(master)
-  src.start(t0)
-  src.stop(t0 + 0.4)
+  /* 主气声：散开。attack 45ms —— 低于 5ms 就会被听成「击」 */
+  air(c, {
+    t0,
+    dur: 0.8,
+    peak: 0.24,
+    attack: 0.045,
+    hold: 0.02,
+    release: 0.75,
+    filter: { type: 'highpass', from: 800, q: 0.7 },
+    wet: 0.5
+  })
 
-  /* 闷响：把「释放」落到身体上，不是只有耳朵 */
-  tone(c, { type: 'sine', from: 128, to: 54, t0, dur: 0.34, peak: 0.42, attack: 0.004, hold: 0.01, release: 0.34 })
+  /* 低频气层：只添体积，不带音高（所以不会变成鼓） */
+  air(c, {
+    t0,
+    dur: 1.2,
+    peak: 0.13,
+    attack: 0.1,
+    hold: 0.03,
+    release: 1.15,
+    filter: { type: 'bandpass', from: 260, q: 0.5 },
+    wet: 0.5
+  })
+
+  /* 起绒：极短的高频，给「散开」一个可辨的起点，免得整段糊成一团 */
+  air(c, {
+    t0,
+    dur: 0.16,
+    peak: 0.06,
+    attack: 0.03,
+    hold: 0,
+    release: 0.14,
+    filter: { type: 'highpass', from: 3800, q: 0.6 },
+    wet: 0.4
+  })
+
+  /* 底座：慢起的低音，把这一拍落在房间的尺度上（不是落在胸口上） */
+  tone(c, { type: 'sine', from: 165, t0, dur: 2.6, peak: 0.1, attack: 0.2, hold: 0.1, release: 2.5, wet: 0.55 })
   return true
 }
 
 /**
- * ③ 翻牌「唰」—— 很短的带通噪声 + 一点点击感。
- * 关键在**短**：超过 200ms 就不再像「一张纸翻过去」，而像风。
+ * ③ 翻牌「丝绢」—— 一张纸/一匹绸翻过去。
+ *
+ * 用户说这个也是「鼓」。根因同样是那个 420→300Hz 的正弦，加上 4ms 的起音：
+ * 「有音高的短促击打」= 手鼓。上一版的注释里我还写着「加一点木质嗒才像牌」，
+ * 方向正好反了 —— 纸和绸**没有音高**，有音高的那个「嗒」才是不像的原因。
+ *
+ * 现在：**一个振荡器都不留**，全是噪声，靠**两条不同中心频率的带通错开 28ms**
+ * 拉开时间轴，模拟「边缘先起、整张再跟」的丝绸摩擦。
  */
 export function flip() {
-  if (!enabled) return false
-  const c = engine()
+  if (!isSoundOn()) return false
+  const c = audio()
   if (!c) return false
   const t0 = c.currentTime + 0.005
 
-  const src = c.createBufferSource()
-  src.buffer = noise(c)
-  const hp = c.createBiquadFilter()
-  hp.type = 'bandpass'
-  hp.frequency.setValueAtTime(2600, t0)
-  hp.frequency.exponentialRampToValueAtTime(1500, t0 + 0.16)
-  hp.Q.value = 0.7
-  const g = c.createGain()
-  env(g, t0, 0.34, 0.004, 0.012, 0.17)
-  src.connect(hp)
-  hp.connect(g)
-  g.connect(master)
-  src.start(t0)
-  src.stop(t0 + 0.26)
-
-  /* 一点点木质「嗒」—— 只有噪声的话读起来是「沙」，加上这个才像牌 */
-  tone(c, { type: 'sine', from: 420, to: 300, t0, dur: 0.09, peak: 0.16, attack: 0.003, hold: 0.008, release: 0.09 })
+  air(c, {
+    t0,
+    dur: 0.2,
+    peak: 0.15,
+    attack: 0.016,
+    hold: 0.01,
+    release: 0.18,
+    filter: { type: 'bandpass', from: 1700, q: 1.1 },
+    wet: 0.28
+  })
+  /* 错开 28ms 的第二层：摩擦声的「拖尾」，中心频率更高、更细 */
+  air(c, {
+    t0: t0 + 0.028,
+    dur: 0.26,
+    peak: 0.09,
+    attack: 0.012,
+    hold: 0.01,
+    release: 0.23,
+    filter: { type: 'bandpass', from: 4800, q: 0.9 },
+    wet: 0.35
+  })
+  /* 起绒：真正让听感「软」的是这一层极高频，它对应纤维的细碎摩擦 */
+  air(c, {
+    t0,
+    dur: 0.1,
+    peak: 0.035,
+    attack: 0.008,
+    hold: 0,
+    release: 0.09,
+    filter: { type: 'highpass', from: 8000, q: 0.5 },
+    wet: 0.3
+  })
   return true
 }
 
 /**
- * ④ 揭晓「叮」—— 一枚玻璃铃：四个非整数倍分音 + 长衰减。
- * 倍率刻意用 2.01 / 2.99 / 4.21 而不是 2 / 3 / 4：
- * **整数倍会听成风琴/方波**（谐波锁在一起），非整数倍才有玻璃或金属的拍频感。
+ * ④ 揭晓「颂钵」—— 牌面亮出来。
+ *
+ * 用户说上一版那声「叮」不符合体感。那是个玻璃风铃：659Hz、起音 12ms、
+ * 泛音按 1 / 2.01 / 2.99 / 4.21 排。它「亮」得很快，所以像提示音，
+ * 不像一场占卜的落点。
+ *
+ * 现在换成**颂钵**：低基音（196Hz = G3）、起音放宽到 180ms（是「嗡」起来，
+ * 不是「敲」下去）、余韵 6 秒；泛音改用**钟的模态比** 2.76 / 5.40 / 8.93
+ * （这几个数不是随便挑的，是钟与钵的弯曲振动模态，所以听起来才「像钵」）。
+ * 再叠一个只差 1.6Hz 的副基音，让两条基音缓慢打拍 —— 钵「活」起来的关键。
  */
 export function reveal() {
-  if (!enabled) return false
-  const c = engine()
+  if (!isSoundOn()) return false
+  const c = audio()
   if (!c) return false
-  const t0 = c.currentTime + 0.01
-  const base = 659.25 /* E5，和暗色调配起来不刺 */
+  const t0 = c.currentTime + 0.015
+
+  /* 基音 + 微微失谐的副基音（拍频约 0.8 次/秒） */
+  tone(c, { type: 'sine', from: 196, t0, dur: 6.2, peak: 0.28, attack: 0.18, hold: 0.15, release: 6.0, wet: 0.55 })
+  tone(c, { type: 'sine', from: 197.6, t0, dur: 5.9, peak: 0.11, attack: 0.22, hold: 0.15, release: 5.7, wet: 0.55 })
+
+  /* 钟形非谐泛音：越高的分音衰减越快（真实金属体的能量也是这样走的） */
   const parts = [
-    { mult: 1, peak: 0.3, rel: 1.5 },
-    { mult: 2.01, peak: 0.16, rel: 1.1 },
-    { mult: 2.99, peak: 0.09, rel: 0.8 },
-    { mult: 4.21, peak: 0.05, rel: 0.5 }
+    { mult: 2.76, peak: 0.095, atk: 0.22, rel: 3.2 },
+    { mult: 5.4, peak: 0.05, atk: 0.26, rel: 1.7 },
+    { mult: 8.93, peak: 0.022, atk: 0.3, rel: 0.9 }
   ]
   parts.forEach((p) => {
     tone(c, {
       type: 'sine',
-      from: base * p.mult,
+      from: 196 * p.mult,
       t0,
       dur: p.rel,
       peak: p.peak,
-      attack: 0.012,
+      attack: p.atk,
       hold: 0,
-      release: p.rel
+      release: p.rel,
+      wet: 0.6
     })
   })
-  /* 一层很轻的气声，把「牌面亮出来」这件事衬软 */
-  const src = c.createBufferSource()
-  src.buffer = noise(c)
-  const hp = c.createBiquadFilter()
-  hp.type = 'highpass'
-  hp.frequency.value = 3800
-  const g = c.createGain()
-  env(g, t0, 0.055, 0.05, 0.05, 0.7)
-  src.connect(hp)
-  hp.connect(g)
-  g.connect(master)
-  src.start(t0)
-  src.stop(t0 + 0.95)
+
+  /* 一层很轻的气声铺底：把「牌面亮出来」这件事衬软，不要让它像一声提示音 */
+  air(c, {
+    t0,
+    dur: 3.4,
+    peak: 0.05,
+    attack: 0.6,
+    hold: 0.4,
+    release: 3.2,
+    filter: { type: 'bandpass', from: 900, q: 0.45 },
+    wet: 0.7
+  })
   return true
 }

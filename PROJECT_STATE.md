@@ -5,10 +5,14 @@
 > 未完成的工作看 **`NEXT_STEPS.md`**（含具体做法、优先级、成本与踩坑提醒）。
 > 每次有实质进展都要回来更新本文档的「当前阶段」与「变更日志」。
 
-最后更新：2026-09-19（第二十轮：**水晶球换成真 3D（three.js）+ 女巫的脸二次压暗到完全看不见五官**）。
-3D 球是本项目对「不引入新依赖」的**唯一已批准例外**；手抠成独立前景层压在球前（遮挡实测 10.1% < 15% 上限）；
-顺带查出并修掉 `ParticleField` 漏做 `prefers-reduced-motion` 的一处无障碍缺口。
-当天前情：第十九轮 v2 主视觉首版出图并装入皮肤 + 建立 GitHub 私有仓；第十八轮移除离线通道 + `git init`）
+最后更新：2026-09-20（第二十四轮：**修掉一个「假完成」—— 标题的拉丁字体从来没生效过**）。
+第二十三轮做的 Cinzel 子集里装的其实是 Google 返回的 HTTP 400 错误页 HTML，而坏字体是**静默回退**的：
+不报错、截图看不出、构建无感，所以那一轮「标题换了罗马碑刻体」这个结论是**假的**。
+本轮修好，并把字体验收做成脚本 —— `fetch-title-fonts.mjs` 落盘**前**验 `wOF2` 魔数、
+`probe-fonts.mjs` 直接问浏览器「这个字是谁画的」（A 脸状态 / B 逐字形 / C 页面真用上）。
+第二十三轮本体：音效四个音全部重做 + 幽暗寂静环境音 + 卡牌下挪（含「只挪卡牌是没用的」那条几何结论）+ 标题罗马碑刻体。
+再往前：第二十轮把水晶球换成真 3D（three.js，本项目对「不引入新依赖」的**唯一已批准例外**）、
+女巫的脸二次压暗到五官完全不可见。
 
 ---
 
@@ -78,6 +82,14 @@ tarot-app/
 │   ├─ run-flows.mjs             ⭐ **通用批量运行器**（`spawnSync` 绕开降级 shell；一次跑多个 flow × 多视口）
 │   ├─ verify-orb3d.mjs          ⭐ 3D 球四用例核验（桌面 / 真机 mobile / reduced ×2），末尾打印 ALL_PASS
 │   ├─ verify-halo.mjs           ⭐ 充能光晕消融归因（配 `_check_halo.py` 做径向亮度归属）
+│   ├─ fetch-title-fonts.mjs     ⭐ **重抓标题字体子集**（Google Fonts `text=` 端点）。
+│   │                              ⚠️ 校验写在流程里：`text=` 一律 encodeURIComponent、落盘**前**验 `wOF2` 魔数、
+│   │                              不过就 exit 1 绝不写坏文件进 `src/`。改标题文案后必须跑
+│   ├─ probe-fonts.mjs           ⭐ **字体探针**（第二十四轮新增，自带 CDP 驱动，**不是** flow）。
+│   │                              判据 A `document.fonts` 状态 / B 逐字形「谁画的」（三份子集各挂独立族名，
+│   │                              看 `isCustomFont`，**不能比族名**） / C 页面真实节点有没有用上。
+│   │                              对应「文件坏了 / 文件缺字 / CSS 没接上」三种故障，缺一条漏检一种。
+│   │                              ⚠️ 页面内拿不到 `CSS.getPlatformFontsForNode`，所以做不成 `--eval-file` flow
 │   ├─ build_orb_texture.py      ⭐ 球内星云等距圆柱贴图（循环卷积保无缝，构建期烤好）
 │   ├─ build_hero_hand.py        ⭐ 手部前景层抠图（亮度阈值，压球前）
 │   ├─ fix_hero_face.py          ⭐ 女巫脸部引导插值压暗（幂等，可重复跑不叠深）
@@ -91,6 +103,8 @@ tarot-app/
 │   │                              / probe-sfx（音效**结构事实**：ctx 是否真建起来且 running、
 │   │                                 四类节点是否真连上；听不了声音，就验这些）
 │   │                              / probe-sfx-off（反向：从没开过音效的用户不该被建 ctx）
+│   │                              / probe-ambient（环境音：节点增量 / 常驻性 / duck 与恢复 /
+│   │                                 关开关真的停 —— 给每个 GainNode.gain 装目标值记录器）
 │   ├─ verify_manifest.mjs       ⭐ 按 `MANIFEST.sha256` 逐文件校验快照完整性（`node scripts/verify_manifest.mjs <目录>`）
 │   │                              —— 替代原先文档里那条五层转义的一行命令，见第 6 节第 31 条
 │   ├─ contact_sheet.py          总览拼版（22 张联络表，验收风格/边框一致性用）
@@ -118,9 +132,27 @@ tarot-app/
     │                            `element` / `astrology` / `symbol` / `favor[2]` / `avoid[2]`
     ├─ data/whispers.js          ⭐ 两侧低语文案池（`WHISPER_LINES`：idle 22 条 + ritual 6 条 + `WHISPER_STATIC_STEP`）。
     │                            ⚠️ 导出名**不能**叫 `WHISPERS` —— `skin.js` 里那个是版式配置，重名会静默串用
-    ├─ audio/sfx.js              ⭐ 音效**合成**（第二十二轮）：蓄势嗡 / 释放啪 / 翻牌唰 / 揭晓铃。
-    │                            零素材零依赖，纯 Oscillator + BufferSource + BiquadFilter。
-    │                            **默认关**；ctx 只在用户手势里创建（见文件头三条规矩）
+    ├─ audio/                    ⭐ 声音全程**合成**，零音频素材（第二十二轮建，第二十三轮重做）
+    │   ├─ engine.js             ⭐ 音频底座：ctx / 总线 / **程序化厅堂混响**（现算 IR）/ 包络与噪声工具。
+    │   │                        音效与环境音共用同一个 ctx 与总线 —— 否则开关只关得掉一半。
+    │   │                        三条规矩写在文件头：默认关 / ctx 只在手势里建 / 增益必走包络
+    │   ├─ sfx.js                四个音（第二十三轮全部重做）：屏息 / 雾散 / 丝绢 / 颂钵。
+    │   │                        ⚠️ 判据：**50ms 内把能量堆到 200Hz 以下的写法一律不许出现**
+    │   │                        （上一版「汽车加速 / 拍鼓 / 手鼓 / 电子叮」全部违反它）
+    │   └─ ambient.js            环境音「幽暗寂静」：双失谐 drone + 风 + 稀疏点缀 + 混响。
+    │                            抽牌时 duck 到 35%；页面切后台静音；淡入 3.5s。
+    │                            ⚠️ drone 是常驻振荡器，**不能**用 sfx 那种一次性包络节点搭
+    ├─ assets/fonts/             ⭐ 标题专用字体子集（合计 **10.0 KB**）：
+    │                            `title-latin.woff2`  Cinzel 可变字重 400..900  `TAROT·`        1.82 KB
+    │                            `title-han.woff2`    Noto Serif SC 900        `今夜一签`       1.63 KB
+    │                            `title-han-400.woff2`Noto Serif SC 400        `日签`+全部副标题 6.57 KB
+    │                            再生成：`node scripts/fetch-title-fonts.mjs`（含 `wOF2` 魔数校验）
+    │                            验收：`node scripts/probe-fonts.mjs <url>`（问浏览器「这个字是谁画的」）
+    │                            ⚠️ 汉字只有 400 / 900 两档 → 用 `var(--font-title)` 的地方**字重只能取这两个值**；
+    │                               写 600 会被就近匹配到 900 脸，而 900 子集里有「签」没有「日」，
+    │                               「日」会继续回退到系统宋体 —— 同一个词两种字体（第二十四轮踩过）
+    │                            ⚠️ 改标题带文案要**同步改两处**：`fetch-title-fonts.mjs` 的 `SPECS`
+    │                               与 `probe-fonts.mjs` 的 `EXPECTED`。详见 NEXT_STEPS §2 P2 / §13
     ├─ utils/shareCard.js        ⭐ 分享卡片图（Canvas 三层复刻牌面 + 竖版排版）
     ├─ utils/prefetch.js         ⭐ 牌面空闲预热（避免首次抽牌时插画还在下载）
     ├─ hooks/useDrawState.js     抽牌记录（unlimited / daily）+ readTodayRecord()（供首屏同步判断）
@@ -213,26 +245,52 @@ tarot-app/
 
 三个变量各有明确出处，**改任何一个都要同时确认另外两个**：
 
-| 变量 | 来源 | 桌面实测值 | 含义 |
+| 变量 | 来源 | 当前值 | 含义 |
 |---|---|---|---|
-| `--stage-anchor-y` | `ANCHORS.stage.y`（`skin.js`） | `38.5` | 牌**中心**在视口里的高度百分比 |
-| `--card-height-half` | `CARD_HEIGHT_HALF`（`skin.js`） | `min(23vh, 210px)` | 牌高的一半，`CARD_HEIGHT` 的 1/2 |
-| `--title-gap` | `TITLE_GAP`（`skin.js`） | `20px` | 标题块底边与牌顶之间的净空 |
+| `--stage-anchor-y` | `ANCHORS.stage.y`（`skin.js`） | `40` | 牌**中心**在视口里的高度百分比 |
+| `--card-height-half` | `CARD_HEIGHT_HALF`（`skin.js`） | `min(21.5vh, 210px)` | 牌高的一半，`CARD_HEIGHT` 的 1/2 |
+| `--title-gap` | `TITLE_GAP`（`skin.js`） | `38px` | 标题块底边与牌顶之间的净空 |
 
 推导：牌顶 = `100% - stage-anchor-y + card-height-half`（视口高度减去牌顶之上的距离）；
 标题块底边就落在这条线上，再往上让出 `title-gap`。
 
+> ⚠️ **`title-gap` 是「副标题 ↔ 牌面」唯一的可调量，这一点反直觉、必须记住。**
+> 因为标题带是**跟着牌顶走**的：挪卡牌、改卡高，都只是让两者一起平移，
+> 间距**恒等于 `title-gap`**。第二十三轮用户说「卡牌有点靠上，与副标题有点重叠」，
+> 第一反应是「把牌往下挪」—— 那样改完间距一动都不动。
+> 真正拉开距离只能改 `title-gap`，而改它会把标题带整块往上顶（顶端余量很薄，
+> 见 `index.css` 的 `.headline__title` 字号公式）。
+>
+> 第二十三轮用的解法是「**下移换空间**」：落点 `38.5 → 40`、卡高 `46vh → 43vh`
+> （下半 `23 → 21.5`）→ 牌顶 `15.5% → 18.5%`（牌往下走 20–24px），
+> 再把 `title-gap` `20 → 38` → 标题带绝对位置净变化只有 +0.4px(@612) / +3.2px(@708)，
+> 而副标题与牌之间的净空**翻倍**。
+>
+> 而且 `40 + 21.5 = 61.5%`，**与改前逐位相同** —— 面板净空零损失。
+> 这是刻意的：竖屏下面板净空只剩 10.1px，往下挪底边立刻翻负。
+
 **两条硬约束，改代码前先读：**
 
 1. **`CARD_HEIGHT` / `CARD_HEIGHT_HALF` 必须与 `.card` 的实际高度保持一致**。`.card` 的高度写的是
-   `var(--card-height, min(46vh, 420px))` —— `46vh` 这个字面量是 `skin.js` 里 `CARD_HEIGHT` 的兜底副本。
+   `var(--card-height, min(43vh, 420px))` —— `43vh` 这个字面量是 `skin.js` 里 `CARD_HEIGHT` 的兜底副本。
    改高度必须**两边一起改**，只改一边会让标题错位（CSS 变量没注入时走兜底值，注入后走 `skin.js` 值）。
-2. **`.headline` 不要加 `top`，也不要给固定高度**。它是 bottom 锚定的自增高块，高度由 `font-size: clamp(24px, 3vw, 36px)`
-   与副标题行数决定；一旦固定高度，字体在窄视口收缩时标题底边就会脱离牌顶。
-   移动端的字号与行距通过媒体查询调整，**不要再用 `top: 10%` 之类的覆盖值**（第十二轮已删除该覆盖）。
+2. **`.headline` 不要加 `top`，也不要给固定高度**。它是 bottom 锚定的自增高块，高度由
+   `.headline__title` 那条 `clamp(26px, min(3.6vw, calc(14.8vh - 56.8px)), 54px)` 与副标题行数决定；
+   一旦固定高度，字体在窄视口收缩时标题底边就会脱离牌顶。
+   ⚠️ 那个 vh 项的常数是**从几何契约反推**的，不是试出来的系数 —— 改 `stage.y` / `CARD_HEIGHT_HALF` /
+   `TITLE_GAP` 任意一项，都必须把它重推一遍（推导过程写在 `index.css` 那段注释里）。
+   移动端的字号与行距通过媒体查询调整（窄屏上限受**顶栏横向空档**限制，见 `index.css` 里的注释），
+   **不要再用 `top: 10%` 之类的覆盖值**（第十二轮已删除该覆盖）。
+3. **`.headline__rule`（碑铭线）必须是真实元素，不要改回伪元素**。它落在 `title-gap` 那 38px 里，
+   是全站唯一「在标题带与牌面之间」的东西，必须能量位置才能断言它没越到牌面上。
 
-回归验证脚本：`scripts/flows/audit-title.js` 会量出 `overlapTitleCard` / `overlapSubCard` / `overlapHeadlineCard`，
-三个都必须为 `0`。桌面（1582×804）与移动（504×784）都要跑，移动端是最容易破的地方。
+回归验证脚本：`scripts/flows/audit-title.js` 会量出 `overlapTitleCard` / `overlapSubCard` / `overlapHeadlineCard`
+（三个都必须为 `0`），另外还断言四件事：`PASS_subCardGap`（副标题↔牌面 ≥30px）、
+`PASS_titleOnScreen`（标题墨迹不被顶出屏幕）、`PASS_noTopbarHit`（标题/副标题墨迹与顶栏文字**零二维相交**）、
+`PASS_rulePlaced`（碑铭线在副标题下、又没落到牌面上）。
+桌面（1582×804，实测 innerHeight 708）与移动（504×784，实测 688）都要跑，移动端是最容易破的地方。
+⚠️ 这个环境的 Chrome 窗口高有上限，`--h` 传进去后 `innerHeight` 会比它**小 96px**（804 → 708、708 → 612），
+看结果时注意换算。
 
 ### 美术产出的四条工艺约定
 
@@ -513,7 +571,18 @@ PY="C:/Users/29923/.workbuddy/binaries/python/envs/default/Scripts/python.exe"
 "$N" scripts/run-flows.mjs probe-whispers --w 504 --h 784   # 窄屏：低语整层应 display:none
 "$N" scripts/run-flows.mjs probe-panel-worst --reduced      # 逐张遍历 22 张，取最坏净空
 "$N" scripts/run-flows.mjs probe-sfx probe-sfx-off           # 音效：开了会响 / 没开不建 ctx
+"$N" scripts/run-flows.mjs probe-ambient                     # 环境音：起来 / 常驻 / duck / 关得掉
 "$N" scripts/verify-orb3d.mjs                  # 3D 球四用例
+
+# ---- 字体（改了标题带文案 / 觉得字体「看起来不对」时跑）----
+"$N" scripts/fetch-title-fonts.mjs             # 重抓子集（会验 wOF2 魔数，坏响应直接报错退出）
+"$N" scripts/probe-fonts.mjs http://127.0.0.1:5173/   # dev；A/B/C 三条判据全过才 exit 0
+"$N" scripts/probe-fonts.mjs http://127.0.0.1:4199/   # 生产构建（字体是内联 data URI，另一条路径）
+
+# ---- 在生产构建上跑 flow（4188 / 5173 都是 dev server）----
+"$N" node_modules/vite/bin/vite.js build
+"$N" node_modules/vite/bin/vite.js preview --port 4199 --strictPort
+APP_URL=http://127.0.0.1:4199/ "$N" scripts/run-flows.mjs audit-title audit-draw
 
 # ---- 打包（给需要看代码的人；交付主形态是线上链接）----
 "$PY" scripts/package_project.py              # 完整包（约 198 MB）
@@ -1331,3 +1400,58 @@ PY="C:/Users/29923/.workbuddy/binaries/python/envs/default/Scripts/python.exe"
   另修一处判据自身的错：取顶栏边界时先写成「叶子节点的左边缘」，
   而右侧那组的容器其实从更左边就开始了（里面还有「牌之图鉴」按钮）→ **拿 351 当边界会误报安全**，
   必须取 `.topbar` 的直接子元素。
+- **2026-09-20（第二十三轮 · 音效全部重做 + 环境音 + 卡牌下挪 + 标题罗马碑刻体）**
+  用户四条反馈：① 音效「和汽车加速很像 / 像拍了一下鼓 / 翻转也是鼓 / 揭晓的叮不符合体感」；
+  ② 要有**幽暗寂静**的背景音乐；③ 卡牌靠上、与副标题重叠；④ 标题参考**罗马艺术字**。
+  - **① 音效重做**：四条反馈指向同一件事 —— 上一版四个音里有三个是「**有明确音高 + 快起音 + 低频能量集中**」，
+    人耳对这三件事的归类就是**又快又硬的机械/打击事件**。据此重写四个音
+    （屏息 / 雾散 / 丝绢 / 颂钵），并立一条判据写进 `engine.js` 文件头：
+    **凡是在 50ms 内把能量堆到 200Hz 以下的写法，一律不许出现**。
+    另加程序化厅堂混响（`makeIR()`：噪声 × 频率相关衰减 + 早期反射 + 左右去相关）——
+    合成音「廉价」往往不是音色问题，是**没有空间**。
+  - **② 环境音**（新增 `src/audio/ambient.js`）：双失谐 drone（0.4Hz 拍频，**刻意不写和弦进行**，
+    一有进行就变成「一首曲子」会抢戏）+ 风（低通截止被 0.035Hz LFO 推，28.6 秒一个周期 = 声音自己在呼吸）
+    + 每 14–30 秒一声稀疏点缀 + 整条总线走混响。礼仪三条：抽牌时 duck 到 35%、切后台静音、默认关且淡入 3.5s。
+    ⚠️ drone **不能**用 `tone()` 那种一次性包络节点搭（会 0.15s 自己停），正解是自己建 `osc → 固定增益 → mix`。
+  - **③ 几何：只挪卡牌是没用的（重要）** —— 标题带是从卡牌顶边**往上锚定**的，
+    只把牌往下挪，标题带跟着一起挪，副标题与牌面之间的间距纹丝不动。
+    改用「**下移换空间**」：落点 38.5% → 40%、卡高 46vh → 43vh、`TITLE_GAP` 20 → **38px**
+    → 牌面顶边 15.5% → 18.5%（牌实际下移 20–24px），而**底边 61.5% 与改前完全相同**，面板净空一点没损失。
+    标题字号公式随之重推为 `calc(14.8vh − 56.8px)`。
+  - **④ 标题罗马碑刻体**：`--font-title` = Cinzel（拉丁）+ Noto Serif SC 900/400（汉字），
+    只给标题带换字（子集 10.0 KB）；另加**碑铭线**（真实元素 `.headline__rule`，伪元素量不了位置）
+    与两层极轻的刻痕 `text-shadow`。副标题同族 400，避免「两种宋体叠在一起」。
+  - 窄屏撞了一次墙：上限提到 40/42px 后「今」的左边缘与「TAROT · 日签」右边缘**二维相交 2.4px**，
+    **横向才是紧的那一头**，解出上限 38px（想让窄屏标题再大必须先动顶栏）。
+- **2026-09-20（第二十四轮 · 拉丁字体是坏的，已修；字体验收从此进代码）**
+  没有新需求，是做完第二十三轮后自检发现的**真 bug**，教训比 bug 本身值钱。
+  - **`title-latin.woff2` 里装的不是字体，是 Google 返回的 HTTP 400 错误页 HTML**（1.66 KB）——
+    手搓的 fetch 把 `text=` 里没做百分号编码的 `·` 直接塞进 URL，Google 拒了，我把响应体当字体存了。
+    **所以「标题换了罗马碑刻体」这个结论当时是假的**，拉丁字形一直由系统字体顶替。
+  - **为什么没被发现（重点）**：浏览器 `font-family` 是**逐字符静默回退**的，坏文件不报错、Console 干净；
+    截图看不出（回退后的也是衬线体，而我根本不知道 Cinzel 正品长什么样）；`vite build` 无感；
+    而我自己的验收表里**字体那一栏是空的** —— 探针验的全是音效和几何。
+    暴露点是下一轮顺手检查构建产物时发现一段 CSS 内联 data URI 解出来是 HTML。
+  - **修**：重抓拉丁字体（**落盘前验 `wOF2` 魔数**）、顺带按精确字符集重抓两个汉字子集；
+    Latin 那张其实是**可变字体**，`@font-face` 从 `font-weight: 600` 改成区间 `400 900`；
+    `.topbar__brand` 显式 `font-weight: 400`（**不能写 600**：汉字脸只有 400/900，
+    600 会就近匹配到 900 脸，而 900 子集里有「签」没有「日」→「日」回退到系统宋体，同一个词两种字体）。
+    体积 14.6 → **10.0 KB**（旧数里 1.7 KB 是垃圾）。
+  - **新增两个脚本，把「靠人记得」换成「跑不出来就报错」**：
+    `fetch-title-fonts.mjs`（`text=` 一律 encodeURIComponent → 落盘前验魔数 → 不过就 exit 1，绝不写坏文件进 `src/`）
+    与 `probe-fonts.mjs`（三条判据 A 脸状态 / B 逐字形谁画的 / C 页面有没有真用上，
+    分别对应「文件坏了 / 文件缺字 / CSS 没接上」三种故障，缺一条漏检一种）。
+  - **判据设计上的两个坑**：`getPlatformFontsForNode` 报的是**字体文件 name 表里的族名**而非 CSS 族名
+    （挂成 `PROBE LATIN` 它照样报 `Cinzel`，第一版拿族名比对 → 全部假 FAIL），正解是只看 `isCustomFont`；
+    而且自定义宋体与**系统装的** Noto Serif SC 报出来的族名**一模一样** ——
+    若判据写成「族名在白名单里就算过」，上面那个品牌字重 bug 会**静默通过**。
+  - **验收**：`probe-fonts` 在 **dev 与生产构建两种形态**下 A/B/C **全 PASS**
+    （生产里两个小字体走 CSS 内联 data URI，是浏览器里另一条代码路径）；
+    构建产物三个字体字节都是 `wOF2`；`audit-title` 宽 1564×708 与窄 1082×604 四项全过，
+    品牌右缘 **140.7px 与宽屏逐位一致**（说明 Cinzel 400/600 字符宽度相同，窄屏横向余量不受影响）；
+    回归 8 个 flow 全过（`audit-draw` clearance **39.2px** 与改前逐位一致）。
+  - **两条该带走的结论**：①「**看起来对**」不能作为字体正确的判据，字体只有问浏览器自己才算数
+    （可推广：任何「静默回退 / 静默降级」的机制，视觉验收都无效）；
+    ② 列验收表要**按「我改了什么」逐条列，而不是按「我有什么探针」列** ——
+    第二十三轮那张表看着挺全（4 个探针全绿），但它只覆盖了我改动最大的部分，
+    而**字体恰恰是唯一出错的东西**。
