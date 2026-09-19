@@ -22,6 +22,18 @@ import { HERO_BG_LQIP } from '../config/lqip'
 export default function HeroStage({ entranceDone, onDraw, orbDisabled, showOrbLabel, charging = false }) {
   const heroBg = useAssetUrl(ASSETS.heroBg)
   const heroFigure = useAssetUrl(ASSETS.heroFigure)
+  /**
+   * 手部前景层（v2 3D 化新增）。手画在主视觉里，而 3D 球的 canvas 叠在背景之上
+   * —— 球会把手盖住。所以把手抠成一层（scripts/build_hero_hand.py），
+   * 用高于 `.orb` 的 z-index 叠在球前面，读作「手托着球」。
+   *
+   * ⚠️ 它**只在 `entranceDone` 之后挂载**，这是刻意的：
+   *   · 入场期（scale 1.14 → 1）背景里的手还在原位，此时不挂前景层也不会缺手，零额外开销；
+   *   · 入场结束那一帧 plate 的 scale 正好落回 1，两层像素**完全重合**，切换不可见；
+   *   · 定格后两层挂同一个 `bgBreath`（`.hero-plate--idle`），同相呼吸 → 不会出双影。
+   *     （如果两层不同步，背景里的手会和前景层的手分离，看起来就是重影。）
+   */
+  const heroHand = useAssetUrl(ASSETS.heroHand)
   /** 减少动效时：去掉推近与模糊，只留淡入，且时长压到近零 */
   const reduced = useReducedMotion()
 
@@ -70,6 +82,14 @@ export default function HeroStage({ entranceDone, onDraw, orbDisabled, showOrbLa
       )}
 
       <CrystalOrb onDraw={onDraw} disabled={orbDisabled} showLabel={showOrbLabel} charging={charging} />
+
+      {/* 手部前景层：z-index 高于 .orb，让手出现在 3D 球前面。
+          整层铺满画布但只有手部像素不透明，且 pointer-events: none —— 不能吃掉球的点击。 */}
+      {heroHand && entranceDone && (
+        <div className="hero-hand hero-plate--idle" aria-hidden="true">
+          <img className="hero-layer" src={heroHand} alt="" />
+        </div>
+      )}
     </div>
   )
 }

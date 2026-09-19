@@ -24,6 +24,10 @@
  *                     怀疑「某处画错了」时用它对照，能立刻区分「真 bug」和「无头渲染的锅」。
  *   --chrome <path>   指定 Chrome 可执行文件
  *   --reduced         模拟 `prefers-reduced-motion: reduce`（在导航前设置，才能影响挂载时的 matchMedia）
+ *   --mobile          用 CDP 覆盖设备尺寸，得到**真正的**手机视口。
+ *                     Windows 上 Chrome 窗口有最小宽度，`--window-size=420` 只会得到 504，
+ *                     移动端断点根本不会命中 —— 要测手机必须加这个。
+ *   --dpr <n>         `--mobile` 时的 deviceScaleFactor（默认 2）
  *   --profile <dir>   用户数据目录（默认临时目录；同一 profile 会保留 localStorage）
  *   --print           只打印页面信息，不截图
  *
@@ -57,6 +61,8 @@ function parseArgs(argv) {
     else if (a === '--eval-file') opts.evalFile = argv[++i]
     else if (a === '--seed') opts.seed = argv[++i]
     else if (a === '--reduced') opts.reduced = true
+    else if (a === '--mobile') opts.mobile = true
+    else if (a === '--dpr') opts.dpr = Number(argv[++i])
     else if (a === '--gpu') opts.gpu = true
     else if (a === '--chrome') opts.chrome = argv[++i]
     else if (a === '--profile') opts.profile = argv[++i]
@@ -193,6 +199,20 @@ try {
   if (opts.reduced) {
     await cdp.send('Emulation.setEmulatedMedia', {
       features: [{ name: 'prefers-reduced-motion', value: 'reduce' }]
+    })
+  }
+
+  /* 真·手机视口。为什么不能只靠 --window-size：
+     Windows 上 Chrome 的窗口有最小宽度 —— 实测 `--window-size=420,880`
+     得到的 innerWidth 是 **504**，根本压不到手机宽度，所有移动端断点都不会命中。
+     要走 CDP 的 device metrics 覆盖才行（顺带把 DPR 也设上，
+     不然 3D 球的绘制缓冲尺寸测的是 DPR 1，和真机不符）。 */
+  if (opts.mobile) {
+    await cdp.send('Emulation.setDeviceMetricsOverride', {
+      width: opts.w,
+      height: opts.h,
+      deviceScaleFactor: opts.dpr || 2,
+      mobile: true
     })
   }
 

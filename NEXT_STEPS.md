@@ -95,6 +95,9 @@ _archive/v1-2026-09-19/
 | 卡牌美术 | ✅ 完成 | **22 / 22 张大阿卡纳插画 + 统一卡框，已接入代码**；2026-09-18 已根治素材黑边（见第 6 节第 9 条） |
 | 主视觉 | ✅ 完成 | **v2 无球版**（1536×1024），为拆层专门重绘 |
 | 拆层素材 | ✅ 完成 | 水晶球透明层已就位并接入；`hero-figure` 人物层未做（可选） |
+| **水晶球 3D 化** | ✅ 完成 | 第二十轮换成**真 3D（three.js）**——项目唯一已批准的依赖例外。基础贴图构建期烤好（运行时 1 次采样），`transmission` 折射背景这条路走不通（three 采的是场景环境，不是 canvas 背后的 DOM），改为「内部星云 + 冷蓝菲涅尔边 + 镜面高光」。指针视差实测高光质心位移 +42.5px；无 WebGL 自动降级回 2D 球。首屏只多 ~8.3 KB gzip（three 是独立懒加载 chunk）。见 `PROJECT_STATE.md` 第二十轮 |
+| **手部前景层** | ✅ 完成 | 手从背景抠成独立层（31 KB）压在球前，否则「手托着球」变成「球压在手尖上」。遮挡实测 **10.1% < 15%** 上限；与底板同相位呼吸避免重影 |
+| **女巫的脸（二次）** | ✅ 完成 | 用户要求「连鼻子和嘴巴都不要看见」。实测脸框**比周围更暗**（L 0.0462 vs 0.0695），问题是局部对比不是亮度 → 用**引导插值暗场**压掉五官（核心 p99−p50 0.0529 → 0.0078，局部对比能量 −74%），页面级 3× 放大 + 极端对比拉伸确认不可读 |
 | 牌背 | ✅ 完成 | `card-back.webp`，与卡框同一套语言 |
 | 上线前功能 | ✅ 完成 | 分享卡片图 / og meta / 首屏预热 / `DRAW_MODE=daily` |
 | 迎接动画 | ✅ 完成 | **信封开启**（纯代码，风格与站点一致）。第十轮按用户反馈重做成**全屏斜置特写**（原版是画面正中一只小信封，被否）；可跳过、可整体关闭、「今日已抽」自动不播 |
@@ -262,9 +265,31 @@ N="C:/Users/29923/.workbuddy/binaries/node/versions/22.22.2-3/node.exe"
 | `--reduced` | 导航前打开 `prefers-reduced-motion: reduce`，验降级路径 |
 | `--gpu` | 不禁用 GPU。**核对大元素必须加**，见第 12 条 |
 | `--wait <ms>` | 固定等待。**只适合等静态页面，不要用来抓动画帧**，见第 13 条 |
+| `--mobile` | **真正的手机视口**（走 CDP `Emulation.setDeviceMetricsOverride`）。只给 `--w 420` 会被 Chrome 的最小窗口宽顶到 504，打不到移动断点，见第 36 条 |
+| `--dpr <n>` | `--mobile` 时的 `deviceScaleFactor`（默认 2） |
 
 它用 CDP 直接驱动**本机已装的 Chrome/Edge**，不需要装 `agent-browser` / `playwright`
 （那要下约 500 MB 的 Chromium）。**改完视觉相关代码，跑一遍这些 flow 是最省事的验证方式。**
+
+#### 批量运行器（一次跑多组视口 / 多组状态）
+
+散着敲命令容易出错，且本机 bash 是**降级 shell**：`\` 换行 + `&&` 串联的长命令会被拆坏，
+而且**退出码照样是 0** —— 你会以为跑过了，其实什么都没跑（所以绝不能用退出码判断成败）。
+这几个运行器内部一律走 Node `spawnSync` + 参数数组，**不经过 shell**，这类问题一次消失：
+
+| 脚本 | 干什么 |
+|---|---|
+| `scripts/run-flows.mjs <flow…>` | 通用批量跑（`audit-title audit-draw audit-motion reveal share`） |
+| `scripts/verify-orb3d.mjs` | 3D 球三层核验 × 5 组视口/状态（norm / 真机 mobile / reduced ×2 / wide） |
+| `scripts/verify-halo.mjs` | 充能光晕消融实验（全量 / 隐 `.orb__charge` / 隐 `.orb__glow`），配 `scripts/_check_halo.py` 做径向亮度归属 |
+
+```bash
+"$N" scripts/verify-orb3d.mjs      # 末尾打印 ALL_PASS true/false
+"$N" scripts/run-flows.mjs audit-draw reveal share
+```
+
+**排查「蓝紫色气泡」这类疑难视觉时，用消融（一抹一层再量差值）而不是形状推断** ——
+径向平均值分不清「环」和「盘」，见第 37 条。
 
 ### 3.2 不需要浏览器的合成预览
 
@@ -648,6 +673,50 @@ PY="C:/Users/29923/.workbuddy/binaries/python/envs/default/Scripts/python.exe"
      （本机 `http.sslBackend = schannel`）。**这是偶发，重试即通**，不要据此改 SSL 配置。
    - 结论：**验证推送有没有成功，要用 `gh api repos/<owner>/<repo>/commits/main`，
      不能看 `git branch -vv`，也不能只看推送命令的退出码。**
+
+34. **🐛 React.StrictMode 下 WebGL context 会被自己人杀掉 → 3D 静默退回 2D**（2026-09-19，代价 = 半天）
+   - **现象**：3D 球明明渲染出来了，`onReady` 却从不触发，`.orb--has3d` 类没挂上，2D 球的内层动画也没关。
+     DOM 在、CSS 在、球「看起来也能用」——**所有肉眼可见的迹象都是正常的**。
+   - **根因**：原实现让 React 渲染 `<canvas ref>`，three 往那个 ref 上建 context。
+     而 `<React.StrictMode>`（`main.jsx`）在开发期会「挂载 → 立刻卸载 → 再挂载」，
+     **React 会复用同一个 DOM 节点** → 第一个实例卸载时 `forceContextLoss()` 掉的，
+     正是第二个实例刚要用的那个 context → 第二个实例建不出 context → 失败 → 降级。
+   - **解法**：**让 three 自己建 canvas**（`renderer.domElement` + `host.appendChild`），
+     完全不要 React 渲染 canvas；清理时再把这张 canvas 从宿主里摘掉。
+     每次挂载都用新 canvas，这类竞态直接消失。
+   - **判据**（别再靠「球看起来对不对」）：
+     ① 只查 DOM 不够 —— 必须问那张 canvas 上的 GL 是否**活着**：`gl.isContextLost()` 必须为 `false`；
+     ② `.orb__canvas` 只能有 **1 张**，多于 1 张说明卸载时没摘干净。
+     两条都写进了 `scripts/flows/probe-orb3d.js`。
+
+35. **⚠️ GLSL 注释里不许出现反引号（这个坑踩了两次）**（2026-09-19，代价 = 两次白跑截图）
+   - 着色器是写在 JS **模板字符串**里的。注释里一个反引号会**当场把模板字符串截断** →
+     剩下的 GLSL 变成 JS 语法 → Vite 转换直接 500 → **整个 hero 白屏**。
+     同理 `${` 会被当插值表达式。
+   - **为什么特别坑**：错误信息的落点是「Missing semicolon」，指着一个 GLSL 变量名，
+     完全看不出是注释里的标点问题；而且**只有在页面白屏时才暴露**，代码本身读起来毫无异样。
+   - **预检习惯**（比跑一轮截图快得多）：改完组件先
+     `curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:<port>/src/components/X.jsx`，
+     **不是 200 就是转换失败**，先修再截图。这条已写进 `OrbCanvas.jsx` 的注释。
+
+36. **⚠️ Windows 上 `--window-size` 压不到手机宽度；测手机必须走 CDP 覆盖**（2026-09-19）
+   - Chrome 窗口有**最小宽度**：`--window-size=420,880` 实测得到的 `innerWidth` 是 **504**，
+     所有移动端断点都不会命中。`DRAW_RITUAL_BRIEF.md` §8.2 记的「移动 504×784」就是这个原因，不是笔误。
+   - `scripts/shot.mjs` 已加 `--mobile` / `--dpr`，走 `Emulation.setDeviceMetricsOverride`
+     （顺带把 DPR 设上，否则 3D 球的绘制缓冲按 DPR 1 测，和真机不符）。实测 390×844 / DPR 2 生效。
+
+37. **⚠️ 判断「某层贡献了什么」要用消融，不能用单张图的曲线形状反推**（2026-09-19）
+   - 场景：球外面有一圈紫色，要判断是 `.orb__glow` 还是 `.orb__charge` 画的。
+     第一版拿一张图做**径向亮度平均**、找断崖 —— 得出的结论是错的方向，
+     照着改 CSS **越改越糟**（贴球那圈贡献从 +3.5 涨到 +24）。
+   - 根因：**径向平均区分不了「环」和「盘」**。同一条曲线可以来自细环，也可以是实心盘，
+     而这两层恰好一个是环一个是盘（`.orb__charge` 是 `radial-gradient(transparent 50%, …66%, transparent 82%)` 的环）。
+   - 正确做法：**消融一层再拍一张**（同一拍、同一视口，每次只隐藏一个候选），
+     用 `A − B` 得到该层的贡献。工具：`scripts/verify-halo.mjs` + `scripts/_check_halo.py`。
+   - 附带教训：这层还挂着无限循环动画（`orbBreath` / `orbRing`），
+     两次截图会落在不同相位 → **只比较同一次实验内部的差值，不要拿不同状态的绝对值比**。
+   - 还有一条流程教训：**别在没确认归因之前就改文件**。当时的改动最后原样回退了，
+     只留下一条「查证记录」注释 —— 那是对的收尾方式（把结论留下，不要留没作用的规则）。
 
 ---
 

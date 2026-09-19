@@ -13,7 +13,17 @@ import { useEffect, useRef } from 'react'
  *
  * 球心用**实测**取（`getBoundingClientRect`），不要从常量推算：
  * 球在 `.hero-frame` 里用百分比 + cqh 定位，视口坐标随视口比例变化，算不出来。
+ *
+ * `prefers-reduced-motion`（2026-09-19 补）：原来这里**没有**这个分支，
+ * 是全站动效里唯一漏掉的一处 —— 全屏星屑会一直在飘、一直在闪，
+ * 而这恰恰是前庭敏感用户最难受的那类动效。现在 reduced 时只画**一帧**静态星屑，
+ * 不起 rAF 循环；`resize` 时补画一帧（否则重排后星屑会整层消失，
+ * 因为 resize 里 clearRect 了却没人再画）。
  */
+/** 只在浏览器里读，且 matchMedia 可能不存在（老内核）—— 读不到就当作「不减少」 */
+const prefersReduced = () =>
+  typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches
+
 export default function ParticleField({ density = 70, converge = 0 }) {
   const canvasRef = useRef(null)
   /** 目标收束值（props 来的，突变） */
@@ -29,6 +39,8 @@ export default function ParticleField({ density = 70, converge = 0 }) {
     const canvas = canvasRef.current
     if (!canvas) return
     const ctx = canvas.getContext('2d')
+    /** 减少动效：只画一帧静态星屑，不起 rAF 循环（见文件头注释） */
+    const still = prefersReduced()
     let frame = 0
     let particles = []
 
@@ -39,16 +51,24 @@ export default function ParticleField({ density = 70, converge = 0 }) {
       canvas.height = h * dpr
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
 
-      particles = Array.from({ length: density }, () => ({
-        x: Math.random() * w,
-        y: Math.random() * h,
-        r: Math.random() * 1.7 + 0.4,
-        vy: -(Math.random() * 0.32 + 0.08),
-        vx: (Math.random() - 0.5) * 0.16,
-        alpha: Math.random() * 0.5 + 0.14,
-        phase: Math.random() * Math.PI * 2
-      }))
+      /* 减少动效时**不重新撒点** —— 那会让静态星屑在每次重排后跳一次位置，
+         而「跳一下」正是 reduced 想避免的东西。
+         点坐标存的是 CSS px，画布尺寸变了也不影响它们仍落在可视区内。 */
+      if (!still || particles.length === 0) {
+        particles = Array.from({ length: density }, () => ({
+          x: Math.random() * w,
+          y: Math.random() * h,
+          r: Math.random() * 1.7 + 0.4,
+          vy: -(Math.random() * 0.32 + 0.08),
+          vx: (Math.random() - 0.5) * 0.16,
+          alpha: Math.random() * 0.5 + 0.14,
+          phase: Math.random() * Math.PI * 2
+        }))
+      }
       ctx.clearRect(0, 0, w, h)
+      /* 减少动效时没有「下一帧」可等，这里必须当场补画 ——
+         否则重排后星屑会整层消失（clearRect 了却没人再画）。 */
+      if (still) step(false)
     }
 
     /** 球心（视口坐标，canvas 满屏所以就是画布坐标）；取不到时返回 null，收束自动跳过 */
@@ -60,7 +80,8 @@ export default function ParticleField({ density = 70, converge = 0 }) {
       return { x: r.x + r.width / 2, y: r.y + r.height / 2 }
     }
 
-    const draw = () => {
+    /** 画一帧。`loop=false` 时不排下一帧 —— 减少动效与 resize 补画都走这条路。 */
+    const step = (loop) => {
       const w = canvas.clientWidth
       const h = canvas.clientHeight
 
@@ -102,11 +123,12 @@ export default function ParticleField({ density = 70, converge = 0 }) {
         ctx.fill()
       })
 
-      frame = requestAnimationFrame(draw)
+      frame = loop ? requestAnimationFrame(() => step(true)) : 0
     }
 
     resize()
-    draw()
+    /* resize() 在 still 时已经补画过一帧，这里就不要再画一次 */
+    if (!still) step(true)
     window.addEventListener('resize', resize)
     return () => {
       cancelAnimationFrame(frame)

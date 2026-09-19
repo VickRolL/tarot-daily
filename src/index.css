@@ -111,6 +111,29 @@ body {
   z-index: 1;
 }
 
+/* 手部前景层（v2 3D 化，2026-09-19）
+   --------------------------------------------------------------------------
+   手画在主视觉里，而 3D 球的 canvas 叠在背景之上 → 球会把手盖住，
+   读起来从「手托着球」变成「球压在手尖上」。所以把手抠成独立一层
+   （scripts/build_hero_hand.py），用**高于 `.orb`（z-index 2）**的层级叠在球前面。
+
+   它整层铺满画布，但只有手部像素不透明（其余 alpha = 0，由脚本羽化），
+   且与背景**逐像素同源** —— 所以边界天然无痕，看不到拼接。
+
+   ⚠️ 两条硬要求：
+   1. **`pointer-events: none` 不能省** —— 这层铺满整个画布，
+      一旦吃事件，水晶球就永远点不到了（球是本页唯一的主 CTA）。
+   2. **它必须与底板同相位呼吸**：这里复用了 `.hero-plate--idle` 的 `bgBreath`。
+      两层只要差一点相位，背景里的手就会和这一层分离成**重影**。
+      （挂载时机也配合过：只在 entranceDone 后挂载，那一刻 plate 的 scale 正好回到 1，
+        两层完全重合，切换不可见。见 HeroStage.jsx 的注释。） */
+.hero-hand {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+
 .scene__vignette {
   position: absolute;
   inset: 0;
@@ -545,6 +568,78 @@ body {
     transform: rotate(360deg);
   }
 }
+
+/* ---------------------- 真 3D 球体（three.js，2026-09-19 v2） ----------------------
+   canvas 叠在 2D 球 `.orb__body` **之上**：不透明球体把它盖住，加载完成即接管。
+   `.orb__body` 保留作兜底（无 WebGL / three 拉不下来时页面不会出现空洞）。
+
+   ⚠️ 三条不能改的：
+   1. **`inset: -2%` 而不是 0** —— 让球的外沿（菲涅尔亮边 + 抗锯齿）有 2% 余量，
+      否则会被 canvas 边界切出一条硬边。渲染侧的 `ORB_FILL` 已按这个补偿过，
+      所以实体球的屏幕直径仍然等于 `--orb-size`。
+   2. **它不能挪进 `.hero-plate`** —— plate 挂着 14s 的呼吸缩放（scale 1 → 1.028），
+      canvas 被 CSS 缩放等于把渲染好的位图拉伸，球会明显发糊。
+      留在 `.orb` 内还有一个好处：跟着 hover / active / charging 缩放，手感与 2D 时代一致。
+   3. **`pointer-events: none`** —— 点击由 `.orb` / `.orb__hit` 接管，canvas 不吃事件。 */
+.orb__stage {
+  position: absolute;
+  inset: -2%;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.orb__canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  /* 3D 就位前保持透明（不出现「半个球」的中间态），就位后 320ms 淡入 */
+  opacity: 0;
+  transition: opacity 320ms ease-out;
+}
+
+.orb__canvas.is-ready {
+  opacity: 1;
+}
+
+/* 3D 接管后，2D 球内部那四层装饰再也不可能有被看见的机会（球体不透明）——
+   直接不渲染，省掉一份白跑的合成。`.orb__body` 本身保留：它的外发光在球体外圈，
+   仍叠在 canvas 之外起作用。 */
+.orb--has3d .orb__swirl,
+.orb--has3d .orb__nebula,
+.orb--has3d .orb__art,
+.orb--has3d .orb__sheen {
+  display: none;
+}
+
+/* 2026-09-19 查证记录：**没有**为 3D 模式改外光晕，这是查完之后的结论。
+   --------------------------------------------------------------------------
+   起因：换成 3D 暗玻璃球后，蓄势拍截图里球外面像套着一个紫色大气泡。
+
+   查法（三层消融，不是目测 —— 详见 scripts/verify-halo.mjs + scripts/_check_halo.py）：
+   同一拍截三张，每次只隐藏一层，按半径做亮度归因。结果：
+
+   | 半径区间 | 主贡献者 | 量 |
+   |---|---|---|
+   | 1.05 – 1.32 R | `.orb__glow` | 仅 +3.5 |
+   | 1.32 – 1.70 R | **`.orb__charge`** | **+14.4** |
+   | 1.70 – 1.90 R | 已收干净 | ~0 |
+
+   那个「气泡」是 `.orb__charge` —— 简报 §7-C 就要求新增的**充能环**，
+   `radial-gradient(transparent 50%, …0.5 66%, transparent 82%)` + 1px 描边，
+   蓄势期按 `scale(1.55) → scale(0.93)` 内收。它本来就是这样，2D 时代也一样；
+   只是那时球自己是一团亮渐变，光晕读作「aura」，现在球暗了，同一圈读作「bubble」。
+
+   ⚠️ 中途我改过一次（把光晕渐变的透明停点从 68% 收到 62%），**实测更糟**：
+      贴球那一圈（1.05–1.32 R）的光晕贡献从 +3.5 涨到 +24 ——
+      透明停得越早、中间档 alpha 就得给得越高，结果把气泡贴得更近更实。
+      形状已回退。教训：径向平均**区分不了环和盘**，靠单张图的曲线形状反推会误判，
+      归因只能靠消融。
+
+   结论：**这是既有设计取舍，不是 3D 化引入的缺陷，所以不动。**
+   要不要把这圈充能环缩小 / 调淡，是视觉决策，留给用户拍板。 */
+
 
 .orb__label {
   position: absolute;

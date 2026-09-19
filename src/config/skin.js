@@ -68,6 +68,21 @@ export const ASSETS = {
   heroBg: slot('hero-bg'),
   heroFigure: slot('hero-figure'),
   heroOrb: slot('hero-orb'),
+  /**
+   * 手部前景层（2026-09-19 v2 3D 化新增）。
+   *
+   * 手画在主视觉里，而 3D 球的 canvas 叠在背景之上 —— 球会把手盖住，
+   * 读起来从「手托着球」变成「球压在手尖上」。所以把手单独抠一层放在**球之上**。
+   * 由 scripts/build_hero_hand.py 生成；缺图时该层不渲染（球正常显示，只是手在球后）。
+   */
+  heroHand: slot('hero-hand'),
+  /**
+   * 球内星云贴图（等距圆柱 / equirectangular，水平无缝）。
+   * 由 scripts/build_orb_texture.py 在**构建期**程序化生成 —— 实时 fbm 太贵
+   * （400px 的球在 DPR2 下是 75 万像素 × 上百次 hash/帧）。缺图时球仍可用：
+   * 回退到纯程序化渐变 + 菲涅尔边缘。
+   */
+  orbNebula: slot('orb-nebula'),
   cardBack: slot('card-back'),
   /** 统一卡框：22 张牌共用同一张透明底素材，保证边框绝对一致 */
   cardFrame: slot('frame'),

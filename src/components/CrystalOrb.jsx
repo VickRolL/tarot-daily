@@ -1,6 +1,8 @@
 import { useState } from 'react'
+import { useReducedMotion } from 'framer-motion'
 import { ASSETS } from '../config/skin'
 import useAssetUrl from '../hooks/useAssetUrl'
+import OrbCanvas from './OrbCanvas'
 
 /**
  * 水晶球 = 抽牌按钮。
@@ -28,6 +30,10 @@ export default function CrystalOrb({ onDraw, disabled = false, showLabel = true,
   const orbArt = useAssetUrl(ASSETS.heroOrb)
   /** 松开后的回弹：0 = 静止，1 = 刚好松开（用于打一拍 1.06 → 1.0） */
   const [released, setReleased] = useState(false)
+  /** 3D 球是否已接管（接管后关掉 2D 球的内层动画） */
+  const [has3d, setHas3d] = useState(false)
+  /** reduced：3D 球只渲一帧静态图，不起渲染循环 */
+  const reduced = useReducedMotion()
 
   const handleClick = (e) => {
     if (disabled) return
@@ -43,7 +49,7 @@ export default function CrystalOrb({ onDraw, disabled = false, showLabel = true,
       /* ⚠️ `.orb.orb--released` 与 `.orb.orb--charging` 会短暂共存（回弹 260ms > 点击后
          同一帧就进 charging）。两个 animation 属性互相覆盖，CSS 里已让 charging 接管 ——
          所以 orbCharge 的起手值特意接在回弹的 1.06 附近，不靠回弹也不会「弹回去再缩一下」。 */
-      className={`orb${released ? ' orb--released' : ''}${charging ? ' orb--charging' : ''}`}
+      className={`orb${released ? ' orb--released' : ''}${charging ? ' orb--charging' : ''}${has3d ? ' orb--has3d' : ''}`}
       onClick={handleClick}
       disabled={disabled}
       aria-busy={charging || undefined}
@@ -61,6 +67,14 @@ export default function CrystalOrb({ onDraw, disabled = false, showLabel = true,
         {typeof orbArt === 'string' && <img className="orb__art" src={orbArt} alt="" />}
         <span className="orb__sheen" />
       </span>
+
+      {/* 真 3D 球体：叠在 2D 球之上；失败/不支持时不渲染 canvas，上面那层原样顶上 */}
+      <OrbCanvas
+        charging={charging}
+        reduced={!!reduced}
+        onReady={() => setHas3d(true)}
+        onFail={() => setHas3d(false)}
+      />
 
       {showLabel && !disabled && <span className="orb__label">轻触水晶球 · 抽取今日之牌</span>}
     </button>
