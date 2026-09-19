@@ -38,7 +38,7 @@
 | 5 | **`prefers-reduced-motion` 是硬要求** | 现在 JS 计时器**没有**做降级：reduced 用户会看到一个静止画面干等。本次加长后若不管，reduced 用户要干等 5 秒 —— **必须**同时提供 reduced 时长表（见 §7-B） |
 | 6 | **动画只允许 transform / opacity / filter** | 不许对 `width/height/top/left/margin` 做关键帧动画（会重排掉帧）。`scripts/flows/audit-motion.js` 会检查 `layoutAnimatingKeyframes`，必须保持为空数组 |
 | 7 | **不许用 `--wait` 抓动画帧** | 时钟基准会差出一整拍。改用**按状态轮询**：本次已给 `.scene` 加 `data-phase`（见 §7-B），验收脚本轮询它 |
-| 8 | **`dist-user/` 是用户查看入口** | 改完必须重跑 `build_user_preview.mjs`，否则离线副本还是旧节奏 |
+| 8 | ~~**`dist-user/` 是用户查看入口**~~ **（2026-09-19 作废）** | v2 只走 http，离线通道已整体移除 → 看用户视角改用 `vite preview`。**本条不再要求重跑任何离线构建** |
 | 9 | **不许 `npm run`** | 本机 npm 会走 `wsl.exe` 被安全策略拦。直接调 node 绝对路径（见附录 A） |
 
 ---
@@ -395,7 +395,8 @@ const handleDraw = useCallback(() => {
 - [ ] `MOTION_AUDIT.md` 新增一节「抽牌仪式分拍」，附**基线 vs 目标对照表**（§3 / §6-B 直接搬）
 - [ ] `PROJECT_STATE.md`：变更日志加本轮；更新顶部「最后更新」日期
 - [ ] `NEXT_STEPS.md`：更新完成度表；把本次新踩的坑写进「已知问题与坑」
-- [ ] **重跑 `scripts/build_user_preview.mjs`**（否则 `dist-user/` 离线副本仍是旧节奏）
+- [x] ~~**重跑 `scripts/build_user_preview.mjs`**（否则 `dist-user/` 离线副本仍是旧节奏）~~
+  —— **2026-09-19 作废**：脚本与离线副本均已删除，无需重跑
 - [ ] 再跑一次 `vite build` 让 `dist/` 同步
 - [ ] 若要重新交付：改 `scripts/package_project.py` 的 `STAMP` 为当天日期（否则与旧包同名直接覆盖）
 - [ ] 清理 `assets/_debug/` 里本轮的临时图（**保留** `probe-baseline.png` 作基线证据）
@@ -411,7 +412,7 @@ const handleDraw = useCallback(() => {
 | 把「加长」实现成**所有曲线统一变慢** | 那会整体变廉价。加长必须靠**增加不动的拍**（④⑦），靠拍与拍的对比产生节奏 |
 | 改卡牌尺寸 / 锚点 / 面板位置 | 会破坏已固化的几何契约（标题带靠 `--card-height-half` 算让位，两边必须同源） |
 | 改 `DRAW_MODE` | 保持 `daily` |
-| 动 `dist/` 与 `dist-user/` 的构建方式 | `--base ./` + 产物经典脚本化是刻意为之（为了离线双击能开），别"顺手优化" |
+| 动 `dist/` 的构建方式 | 2026-09-19 前这条的理由是「离线双击能开」（`--base ./` + 产物经典脚本化）。离线通道已移除，但 `--base` 有独立价值（**站点子目录**部署），`BASE` 常量继续跟随 Vite 的 `base` —— **别改成写死 `/`** |
 | 用 `--wait` 抓动画帧 | 时钟基准会差出一整拍（NEXT_STEPS 第 13 条） |
 | 用 `npm run` / 管道 | 本机 npm 走 wsl 被拦；管道不可靠。用附录 A 的绝对路径 + 落盘再读 |
 | 在 ④悬停拍动 `y` | 与升起的 y 过渡打架，且可能吃掉标题 20px 净空 |
@@ -461,11 +462,12 @@ P="C:/Users/29923/.workbuddy/binaries/python/envs/default/Scripts/python.exe"
   --w 1582 --h 804 --wait 5200 --eval-file scripts/flows/audit-motion.js
 ```
 
-**⑤ 构建烟测 + 重建离线副本**
+**⑤ 构建烟测**
+
+（原先这里是「build + 重建离线副本」；2026-09-19 起离线副本已随离线通道删除。）
 
 ```bash
 "$N" node_modules/vite/bin/vite.js build
-"$N" scripts/build_user_preview.mjs
 ```
 
 ---
@@ -494,6 +496,6 @@ P="C:/Users/29923/.workbuddy/binaries/python/envs/default/Scripts/python.exe"
 4. 改 `CardReveal.jsx` 的翻牌延迟 → 跑探针，确认 `flip90 - riseSettled` 转正且 ≥1500ms
 5. 修 `ReadingPanel.jsx` 的双重计时 → 跑探针，确认 `contentVisible - panelMount ≤ 300ms`
 6. 最后做视觉层（充能 / halo / 环境响应 / 粒子 / 雾）
-7. 全量回归 + 更新文档 + 重建 `dist-user/`
+7. 全量回归 + 更新文档 + 重建产物（`vite build` 即可；离线副本已删除，不再有 `dist-user/` 要重建）
 
 > 每改一步就跑一次探针。这个改造的价值全在**时间轴的形状**上，靠肉眼判断不了 —— 必须看数字。

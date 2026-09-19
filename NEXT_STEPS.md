@@ -24,62 +24,65 @@ N="C:/Users/29923/.workbuddy/binaries/node/versions/22.22.2-3/node.exe"
 
 > `DRAW_MODE` 现在是 `daily`（正式形态）。开发时想反复抽牌，用调试条切「不限次数」即可，不用改代码。
 >
-> **不想开 dev server 时：双击根目录的 `启动开发者版.cmd`** —— 它跑的是**构建出来的开发者版** `dist-dev/`，
-> 带同一套调试条、默认就是「不限次数」（面板上有「再抽一次」）、每次打开都播迎接动画，会自动开浏览器。
-> 只想看、连服务器都不要：直接双击 `dist-dev/index.html`（`file://` 下只有「生成分享卡片」不可用）。
-> 命令行等价于 `node scripts/build_dev_preview.mjs`。
+> ⚠️ **2026-09-19（v2 起）变更**：原先「双击根目录 `启动开发者版.cmd` → 打开构建出来的开发者版 `dist-dev/`」
+> 这条路**已随离线通道整体移除**（Q1 决定：网站只走 http）。
+> 调试条现在**专属于 `vite dev`** —— 需要它就起开发服务器，不必再单独构建一份带调试条的产物。
 
 ### 想看「用户视角」（没有调试条的界面）
 
 调试条、牌面总览由 **`DEV_TOOLS`** 控制 —— 它是**构建期开关**，值由 `vite.config.js` 的 `define` 注入（`__DEV_TOOLS__`），
-三种场景各有取值：`vite dev` → 开 ｜ `vite build` → 关（连代码都被摇掉）｜ `VITE_DEV_TOOLS=1 vite build` → 开（开发者版）。
-所以看用户视角不需要改任何代码。
+现在**只剩两种取值**：`vite dev` → 开 ｜ `vite build` → 关（连代码都被摇掉）。所以看用户视角不需要改任何代码。
 
-**最省事：双击项目根目录的 `打开网站.cmd`** —— 零依赖（不需要 Node / Python / 服务器），浏览器直接打开，
-看到的界面和线上一致：迎接动画 → 抽牌 → 解读面板，没有调试条、没有牌面总览、没有「再抽一次」。
-
-命令行等价：
+**⚠️ 2026-09-19（v2 起）：离线通道已整体移除。** 原先有 `dist-user/`（双击 `index.html` 免服务器直看）、
+`dist-dev/`、三个 `.cmd` 双击入口，以及一套 `file://` 适配（`scripts/lib/offline.mjs`）——
+v2 只走 http（Q1 决策），这些已全部删除。作废的是「免服务器直看」，不是「看用户视角」：
 
 ```bash
 cd "C:/Users/29923/WorkBuddy/2026-09-17-19-02-52/tarot-app"
 N="C:/Users/29923/.workbuddy/binaries/node/versions/22.22.2-3/node.exe"
-"$N" scripts/build_user_preview.mjs     # → dist-user/（离线可双击）
+"$N" node_modules/vite/bin/vite.js build      # → dist/
+"$N" node_modules/vite/bin/vite.js preview    # 本地 http 预览：无调试条、无牌面总览
 ```
 
-> **`dist-user/index.html` 双击就能开**（2026-09-19 起）。
-> 上一版说「必须起 http 服务」是**错的**，当时漏掉了两个真实拦路石：
-> 1. `import.meta.env.BASE_URL` 默认是 `/`，素材被拼成 `/skins/...` → `file://` 下这是**磁盘根目录**（`file:///skins/`）。
->    现在用 `vite build --base ./` 构建，素材变成 `./skins/...`（源码见 `src/config/skin.js` 的 `BASE`）。
-> 2. Vite 产出的是 `<script type="module" crossorigin>`，ES module + `crossorigin` 在 `file://` 下必被 CORS 拦掉。
->    产物 JS 本身**完全自包含**（0 处 `import` / `export` / `import.meta` / 动态 `import()`），
->    所以构建脚本把它改成 `<script defer>` 并补 `'use strict';`（还原 ESM 的严格模式语义），行为等价。
->
-> **唯一的功能差异**：`file://` 下「生成分享卡片」不能用 —— 牌面是跨源图片，画进 canvas 会污染画布，
-> 导出时被浏览器拒绝（实测 `toBlob → SecurityError`，弹窗会给出准确提示）。需要它就走 http：
-> 双击 `start-user-preview.cmd`（或 `npm run user:serve`）。
+**代价要记住**（Q1 当初列明过）：在你真正上线之前，能给人看的通道只有 `vite dev` / `vite preview`，
+两者都要求对方装 Node。线上地址见 §2「发布上线」。v1 的离线副本没丢 ——
+它在冻结快照里（`_archive/v1-2026-09-19/…-code-….zip` 内的 `dist-user/`）。
 
-两个构建脚本都自带自检，任一不过会**非零退出**。前三条是共用的离线检查（零残留绝对路径（`og:url` 豁免）
-+ 无 `type="module"` / `crossorigin` + 素材基址是相对路径），第四条是**一正一反的配对断言**：
-`dist-user` 必须**不含**「重播迎接 / 抽牌模式 / 牌面总览 / 重置今日」，`dist-dev` 必须**含**
-（再加「`__DEV_TOOLS__` 已被构建期替换」「标题已标注开发者版」）。原理见第 6 节第 21~22 条。
-
-> 想重看首屏迎接动画：清掉 localStorage 的 `tarot-daily::draw-record`，或换个无痕窗口。
+> 想重看首屏迎接动画：
 
 ### 想回到 v1（做 v2 之前的那个版本）
 
-工程**不是 git 仓库**（`git rev-parse` 会报 `not a repository`），所以回退靠 `_archive/` 里的冻结快照：
+**两条路，互补，不互相替代。**
+
+**1）git**（2026-09-19 建立）：`git log` 里 `bb0ad52` 就是 v1 基线，改坏了 `git restore` 回到它。
+仓库约定：`core.autocrlf=false`（字节原样入库）、`.cmd` 由 `.gitattributes` 标记为**不做任何换行转换**
+—— 本项目的 `.cmd` 必须 GBK + CRLF，被转成 LF 双击就是坏的，而退出码仍骗人为 0。
+
+> ⚠️ **不要用 `git rm`** —— 本机实测它会触发**目录级误删**：只指定 10 个文件，整个 `scripts/`
+> 的 29 个文件都被从磁盘抹掉（其中 19 个是非预期删除）。当时靠刚建好的基线
+> `git restore --worktree scripts/` 才取回。要删文件请换别的方式，并**在删除后立刻核对文件数**。
+> 详见第 6 节第 30 条。
+
+**2）冻结快照** `_archive/v1-2026-09-19/`：
 
 ```
 _archive/v1-2026-09-19/
 ├─ tarot-app-v1-code-2026-09-19.zip   11.8 MB / 122 文件（src · scripts · public · dist-user · 全部文档与配置）
 ├─ tarot-app-v1-art-2026-09-19.zip   104.2 MB /  42 文件（card-art 母版 · hero-art · concept · card-styles）
 ├─ SNAPSHOT.md                        构成 + 两个 zip 的 sha256 + 关键文件指纹 + 还原步骤
-└─ _verify/                           从 code zip 解出来**真跑过**的验收副本（证明这份备份不是假的）
+└─ _verify/ · _verify-full/           从 code zip 解出来**真跑过 / 逐文件核对过**的验收副本
 ```
 
-解到任意空目录就是完好的 v1：`unzip` 两个包 → 双击 `dist-user/index.html` 即看，`npm install && npm run dev` 即继续开发。
+校验完整性：`node scripts/verify_manifest.mjs <解出来的 tarot-app 目录>`
+（脚本在工程里，不在 v1 包里 —— 它比原来文档里那条一行命令可靠，见第 6 节第 31 条）。
+
+解到任意空目录就是完好的 v1：`unzip` 两个包 → 双击 `dist-user/index.html` 即看
+（**这是最后一份离线副本了**），`npm install && npm run dev` 即继续开发。
 要再冻一版（比如 v2 定稿后）：`python scripts/freeze_snapshot.py --label v2 --date <日期>`。
-**改动不可回退的东西之前先冻一次** —— 这是本工程唯一的版本保险。
+
+**冻结快照照旧要留**：git 管文本变化，快照管「随时拿回一份完整可用产物」，两者互不替代。
+
+**改动不可回退的东西之前先冻一次**
 
 ---
 
@@ -98,48 +101,47 @@ _archive/v1-2026-09-19/
 | 整页手感升级 | ✅ 完成 | 入场/抽牌/翻牌/面板上滑四处动效按审计方案改造完成。零新增依赖、零积分；构建通过；桌面/移动/减少动效三态验证通过 |
 | 抽牌仪式分拍 | ✅ 完成 | **「点击球 → 揭晓」重排成八拍**（蓄势 → 爆闪 → 升起 → **悬停★** → 预压 → 翻牌 → **留白★** → 面板），总 5.7s。根治了「答案早于牌到位 483ms」「空面板挂 1.6 秒」两个真 bug，并顺手修掉「面板侥幸不重叠（桌面只剩 3.2px 净空 / 竖屏超 19.3px）」。零新增依赖、零积分。详见 `MOTION_AUDIT.md` 第 7 节 |
 | 标题遮挡修复 | ✅ 完成 | 「今夜一签」+ 副标题曾被卡牌盖住（桌面 74.4px、竖屏副标题整行）。已改为**从卡牌顶边往上锚定**，与卡牌、顶栏都不冲突；副标题文案顺序 bug 一并修好 |
-| 用户视角副本 | ✅ 完成 | `dist-user/` —— 无调试条、无牌面总览，就是他人打开网站的样子。**双击 `打开网站.cmd` 即看**（2026-09-19 起 `dist-user/index.html` 也能直接双击，零依赖） |
-| 开发者版副本 | ✅ 完成 | `dist-dev/` —— **带调试条**：默认「不限次数」（抽完面板上有「再抽一次」）、重置今日、重播迎接、牌面总览，且每次打开都播迎接动画。双击根目录 `启动开发者版.cmd`（或直接双击 `dist-dev/index.html`）。与用户版**只差一个构建开关** `__DEV_TOOLS__`：实测正式产物与用户版 JS **完全同尺寸**（292.67 kB），开发者版 294.66 kB（+1.99 kB） |
-| 交付包重打 | ✅ 完成 | 09-17 的旧包已废弃；新包 `*-2026-09-19.zip`（完整 197.7 MB / 轻量 22.5 MB），收包的人双击 `打开网站.cmd` 即看 |
+| 离线副本 | ❌ **已移除** | `dist-user/` · `dist-dev/` · 三个 `.cmd` 入口 · `scripts/lib/offline.mjs` 于 2026-09-19（第十八轮）**整体删除** —— v2 只走 http（起因：`file://` 下本地图片不能当 WebGL 纹理，实测 `SecurityError`）。看用户视角改用 `vite preview`。v1 那套仍在冻结快照里 |
+| git 版本控制 | ✅ 完成 | 2026-09-19 建仓，首个提交 `bb0ad52` = v1 基线（118 文件 / 70.92 MB）。`.gitignore` 排除 `_debug`/`previews`/`card-styles`/`_archive`/`dist*`；`core.autocrlf=false` + `.gitattributes` 保住 `.cmd` 的 CRLF（已逐字节验过 blob 与磁盘一致） |
+| 交付形态 | 🔶 **待落地** | 改为**线上链接**（Q2 决策：静态托管 + git），不再发含离线副本的 zip。打包脚本保留给需要代码的人，已去掉离线副本逻辑与 `--no-preview` |
 | 移动端 | 🔶 可用 | 竖屏实测构图成立，不塌；单独出 9:16 主视觉仍是提升项 |
 | 发布上线 | ⬜ 未做 | 纯静态，`dist/` 直接托管 |
 
-**可交付物**：`tarot-app/dist/`（构建产物，可直接静态托管）、
-`tarot-app/dist-user/`（**离线副本，双击 `index.html` 即看**）、
-`打开网站.cmd`（收包人的本地快捷方式）、
-`assets/previews/screen-*.png`（真实渲染截图）、`assets/previews/contact-sheet-framed.png`（22 张成品总览）。
+**可交付物**：`tarot-app/dist/`（构建产物，可直接静态托管）、**线上链接**（待上线，见 §2「发布上线」）、
+`assets/previews/screen-*.png`
 
 ---
 
 ## 2 · 剩余工作（按优先级，附具体做法）
 
-### ✅ P0 · 交付包已重打（2026-09-19 完成）
+### ✅ P0 · 交付形态已改：线上链接（2026-09-19 决策）
 
-上一轮的包是 **09-17 23:16** 生成的，第十一～十三轮的工作（手感升级、标题遮挡修复、用户视角副本）
-全都不在里面 —— 发出去等于给对方一个旧版本。
+原先的交付方式是「打包 zip，收包人双击 `打开网站.cmd` 免服务器直看」。**这条路已作废** ——
+离线通道整体移除后 `dist-user/` 不再生成，包里也就没有可双击的副本了。
 
-**已重打**（`STAMP` = `2026-09-19`；当天第十五轮又改过代码，所以**同日覆盖重打了一次**）：
+新的交付形态（Q2 决策）：
 
-| 包 | 体积 | 内容 |
-|---|---|---|
-| `tarot-app-handoff-2026-09-19.zip` | 197.8 MB（194 个文件） | 全部原始素材 + 代码 + **离线副本** + 两个启动器 |
-| `tarot-app-code-2026-09-19.zip` | 22.5 MB（121 个文件） | 代码 + 运行时素材 + 验收图 + **离线副本** |
+| 项 | 决定 |
+|---|---|
+| 托管 | **静态托管平台**（Netlify / Vercel / Cloudflare Pages 任一）—— 纯静态零后端，平台是最短路径 |
+| 版本控制 | **已 `git init`**（2026-09-19）。平台接 git 后**每次推送自动出预览链接**，正好顶替被砍掉的本地双击通道 |
+| 交付 | **只给线上链接** |
 
-> **⚠️ 当天重打过一次**：第十五轮的抽牌仪式改造（八拍 + 面板矮视口收紧）在**首次打包之后**才落地，
-> 所以 09-19 的包**重打了一遍**（旧包内含的是改造前的旧节奏，已删除）。同日重打会**直接覆盖同名包**，
-> 覆盖前记得确认新包的 `dist-user/` 已重建 —— 否则离线副本还是旧节奏。
+打包脚本**保留**（给需要看代码的人），但已瘦身：去掉离线副本相关逻辑与 `--no-preview` 选项。
 
 ```bash
 PY="C:/Users/29923/.workbuddy/binaries/python/envs/default/Scripts/python.exe"
-"$PY" scripts/package_project.py             # 完整包
-"$PY" scripts/package_project.py --light     # 轻量包
-"$PY" scripts/package_project.py --no-preview  # 想省 6 MB 时：不带 dist-user/
+"$PY" scripts/package_project.py             # 完整包（含全部原始素材）
+"$PY" scripts/package_project.py --light     # 轻量包（代码 + 运行时素材 + 验收图）
 ```
 
-收包的人现在**双击 `打开网站.cmd` 就能看**，不需要装任何东西。
-`dist/`（正式发布用、绝对路径）仍不进包；`assets/_debug`、`node_modules`、Vite 临时配置文件也不进。
+接收方：解压 → `npm install && npm run dev`（或直接看线上链接）。
+`dist/`、`assets/_debug`、`node_modules`、`_archive` 都不进包。
 
-上线前若还改了代码，**记得重打**（改 `STAMP` 或直接覆盖同名包）。
+> ⬜ **还差一步，且需要你本人操作**：选托管平台、登录账号、接上 git 仓库。
+> 那一步涉及你的账号授权，我没有代办。
+
+上线前若还改了代码，**记得重打**
 
 ---
 
@@ -290,12 +292,12 @@ PY="C:/Users/29923/.workbuddy/binaries/python/envs/default/Scripts/python.exe"
 不需要 Node、不需要 Python、不需要起服务器（`dist-user/` 已按离线可用构建好）。
 
 排除项：`node_modules`、`assets/_debug`（临时排查图）、`dist/`（正式发布用，绝对路径）、
-Vite 残留的 `vite.config.js.timestamp-*.mjs`。
-加 `--no-preview` 可以不带 `dist-user/`（省 6 MB，但对方就不能双击直看了）。
+`_archive/`（本地快照）、Vite 残留的 `vite.config.js.timestamp-*.mjs`。
 
-> **打包脚本会先自检 `.cmd` 的编码与换行（GBK + CRLF）**，不合格直接拒绝打包。
-> 这个坑很隐蔽：UTF-8 + LF 的 `.cmd` 双击会报一堆「不是内部或外部命令」，**而退出码还是 0**。
-> 修正用 `python scripts/fix_cmd_encoding.py`（可反复跑）。
+> **⚠️ 2026-09-19 起交付形态改为「线上链接」**（Q2 决策：静态托管 + git）。
+> 原先「打包 zip → 收包人双击 `打开网站.cmd` 免服务器直看」整条路已作废（离线通道整体移除）。
+> 打包脚本**保留**给需要看代码的人，但 `--no-preview` 选项已删除，
+> 打包前的 `.cmd` 编码前置自检也一并删除 —— 工程里已不存在 `.cmd`/`.bat`。
 
 打包命令见 `PROJECT_STATE.md` 的「常用命令」。
 
@@ -430,9 +432,10 @@ PY="C:/Users/29923/.workbuddy/binaries/python/envs/default/Scripts/python.exe"
    - 对照实验：同样内容 CRLF 正常、LF 报错。所以**必须实测，不能靠看**
    - 编码要用 **GBK（zh-CN 控制台的 OEM 代码页）**，并且**别再配 `chcp 65001`**：
      UTF-8 文件配 chcp 65001 会串码；纯 UTF-8 不配 chcp 则中文注释会被按 GBK 读坏语法结构
-   - 工具链：`python scripts/fix_cmd_encoding.py`（修正，幂等）/ `--check`（只检查，退出码 1）
-   - `package_project.py` 已把这条做成**打包前置门槛**：不合格直接拒绝打包
-   - 顺带：本项目里 `start-user-preview.cmd` 在 09-18 那版就是坏的（LF + UTF-8），09-19 才发现
+   - 工具链 `scripts/fix_cmd_encoding.py` 与其「打包前置门槛」**已于 2026-09-19 随 `.cmd` 一起删除**
+     —— 工程里已不存在 `.cmd`/`.bat`。这条现在只作**历史教训**保留：将来若再加 `.cmd`，
+     `.gitattributes` 里的 `*.cmd -text -diff` 与 `core.autocrlf=false` 仍会保住它的 CRLF
+   - 顺带：本项目里 `start-user-preview.cmd`
 
 15. **验证「双击能不能打开」必须用真的双击路径**（2026-09-19）⚠️
    - 中文文件名的 `.cmd` 从 Git Bash 直接调会被编码搞坏，测不出真结果；
@@ -511,6 +514,9 @@ PY="C:/Users/29923/.workbuddy/binaries/python/envs/default/Scripts/python.exe"
      ② 换完必须 `grep` 全文复核残留；③ 这类问题只有**运行时真点一遍**才发现（见第 22 条）
 
 22. **✅ 两个开关的产物要「配对断言」，单侧断言抓不到一半的错误**（2026-09-19）
+   - ⚠️ **2026-09-19（第十八轮）后本条的适用场景已消失**：`VITE_DEV_TOOLS` 那支开关随离线通道移除，
+     现在只有 `vite dev` / `vite build` 两种取值，**没有「另一份产物」可以配对**。
+     留作方法论：将来若再出现「一份源码 + 两个开关产出两份产物」，仍然要一正一反配对断言
    - `dist-user` 断言「**不该**有调试条文案」，`dist-dev` 断言「**必须**有」—— 同一份源码、两个开关、一正一反。
      任一侧失效都会立刻红：define 写错导致两边都开 → 用户版红；两边都关 → 开发者版红。
      只查一侧的话，「两边都关」会**静默通过**（用户版本来就是「不该有」）
@@ -584,13 +590,43 @@ PY="C:/Users/29923/.workbuddy/binaries/python/envs/default/Scripts/python.exe"
      `fetch` / XHR 读本地文件同样被拦。所以「真 3D 球映出女巫」这件事在 `file://` 下做不到
      （除非把纹理内联成 data URI —— data URI 可以当纹理，这是唯一可行但很别扭的退路）
    - **用户决策**：接受以**上线效果优先**，放弃本地双击通道
-   - **受影响的东西（怎么处置尚未敲定 —— 待用户决定后再回填本节）**：`dist-user/` · `dist-dev/` ·
+   - **处置（2026-09-19 第十八轮已执行）**：`dist-user/` · `dist-dev/` ·
      `scripts/lib/offline.mjs` · `build_user_preview.mjs` · `build_dev_preview.mjs` ·
-     `serve_user_preview.mjs` · `打开网站.cmd` · `start-user-preview.cmd` · `启动开发者版.cmd` ·
-     `vite build --base ./` 这个参数（只走 http 后可以回到默认 `/`）
-   - **⚠️ 非对称后果**：`打开网站.cmd` 是**零依赖**通道（不需要 Node / Python / 服务器），
-     它一没，交付包接收方就**必须先有 Node 或先看线上**。这条不能顺手忽略
+     `serve_user_preview.mjs` · `fix_cmd_encoding.py` · `打开网站.cmd` · `start-user-preview.cmd` ·
+     `启动开发者版.cmd` · `flows/offline-open.js` · `flows/offline-share.js` —— **全部删除**。
+     `dist-user/` 与 `dist-dev/` 移到 `_archive/_removed-2026-09-19/`（本机删目录不可信，见第 30 条）。
+     **连带改掉**：`package.json` 去掉 `user:build`/`user:serve`；`vite.config.js` 去掉 `VITE_DEV_TOOLS` 分支；
+     `ShareDialog.jsx` 去掉 `file://` 报错分支及那句指向 `.cmd` 的提示；`package_project.py` 去掉离线副本与
+     `.cmd` 编码前置自检；`freeze_snapshot.py` 去掉对 `dist-user` 的**硬断言**（不删它下次冻结会报假警报）；
+     `scripts/flows/dev-verify.js` 的运行目标从 `dist-dev` 改为开发服务器。
+     `--base` 参数**保留** —— 绝对路径 `/skins/…` 在「站点子目录」下会挂，`BASE` 常量继续跟随 `base`
    - 好消息：v1 冻结快照 `_archive/v1-2026-09-19/` 里整套都在，任何一项都能取回
+
+30. **⚠️ 本机 `git rm` 会触发目录级误删**（2026-09-19 实测，代价极大）
+   - **现象**：`git rm` 只指定了 10 个文件，执行后**整个 `scripts/` 目录的 29 个文件全部从磁盘消失**，
+     其中 19 个是我没有指定的（`git status` 里显示为未暂存的 ` D`，即"工作区被删但索引还在"）
+   - **能救回来，完全是因为几分钟前刚 `git init` 并提交了 v1 基线**：
+     `git restore --worktree scripts/` 一行把 19 个文件全部取回（已逐个核对）
+   - **结论**：① **破坏性操作前必须先有提交** —— 这不是洁癖，这是本次唯一的救命绳；
+     ② 删文件别用 `git rm`；③ 任何删除之后**立刻用文件数核对**，别信退出码（它是 0）；
+     ④ 本机删目录本身也不可信（`rm` 被安全删除拦截，`shutil.rmtree` 同样），
+     要"移除"大目录就用 `shutil.move` 挪到 `_archive/_removed-<date>/`
+   - 同一坑的近亲：`rm` 被拦时可能**不报错就结束**，所以"命令成功"≠"东西删了"
+
+31. **⚠️ 别把校验命令塞进多层转义里**（2026-09-19）
+   - 快照清单里原本贴了一条 `node -e "…split('\n')…"` 的一行命令。它要穿过
+     「双引号 bash 串 → JSON → Python 模板 → `.format()` → markdown」**五层转义** ——
+     实测渲染出来的反斜杠数量就偏了：命令**长得完全正确**，但切不出行，
+     静默报"核对 0 个文件，不一致 0"，是一个**永远绿灯的假检查**
+   - 解法：写成真脚本 `scripts/verify_manifest.mjs`（可传目标目录），零转义层，
+     并且自己保证"一条记录都没核对到"时**报错而不是报通过**
+   - 配套教训：**校验脚本必须做反向测试** —— 造一个"正常 / 内容被改 / 文件缺失"的三合一
+     样本喂给它。这个反向测试当场抓出了脚本自己的一个真 bug：
+     Windows 上清单行尾的 `\r` 会被拼进路径，导致**连正常的文件也被报成缺失**
+
+---
+
+## 7 · 成本红线
 
 ---
 

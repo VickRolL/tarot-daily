@@ -5,7 +5,7 @@
 > 未完成的工作看 **`NEXT_STEPS.md`**（含具体做法、优先级、成本与踩坑提醒）。
 > 每次有实质进展都要回来更新本文档的「当前阶段」与「变更日志」。
 
-最后更新：2026-09-19（第十七轮：**冻结 v1 快照** —— v2 要上真 3D，先把当前工程封成不可变备份 `_archive/v1-2026-09-19/`；当天前情：开发者版 `dist-dev/` + 构建期开关 `DEV_TOOLS` + 调试条竖排化修掉「遮住再抽一次」的真遮挡 bug）
+最后更新：2026-09-19（第十八轮：**移除离线通道**（Q1 决策 —— v2 只走 http）：`dist-user/` `dist-dev/` 三个 `.cmd` 与整套 file:// 适配全部删除；**同时 `git init` 建立版本控制**，首个提交 `bb0ad52` = v1 基线。当天前情：第十七轮冻结 v1 快照、第十六轮开发者版 `dist-dev/` 与调试条竖排化）
 
 ---
 
@@ -21,8 +21,8 @@
 | 2 · 风格锚点 | ✅ 卡牌风格已定稿（二次元赛璐璐 + 统一卡框）；主视觉 v2（无球版）已产出 |
 | 3 · 基础架构 | ✅ 已完成，可运行，构建通过（含牌面三层结构与牌面总览面板） |
 | 4 · 美术资产 | ✅ **22/22 牌面 + 统一卡框 + 牌背 + 主视觉拆层（背景 / 水晶球）全部完成并接入代码**；`hero-figure` 人物层未做（架构上可选，见 `NEXT_STEPS.md`） |
-| 5 · 打磨与上线 | 🔶 **进行中**：整页手感升级 + **抽牌仪式分拍改造**均已完成；分享卡片图 / 分享 meta / 首屏预热 / `DRAW_MODE` 切 daily 已完成；用户视角副本 `dist-user/` 与**开发者版 `dist-dev/`** 均已产出且**可离线双击打开**；**发布上线未做**（唯一实质待办） |
-| 6 · 交付打包 | ✅ 已重打为 `*-2026-09-19.zip`（完整 197.8 MB / 194 文件，轻量 22.5 MB / 121 文件，**均含 `dist-user/`**，收包人双击 `打开网站.cmd` 即看）。当天第十五轮又改过代码，**同日覆盖重打了一次**（旧包内容是改造前的旧节奏，已删）。⚠️ **第十六轮又改了代码（`App.jsx` / `skin.js` / `vite.config.js`），包内容再次过时 —— 要发人必须先重打**；`dist-dev/` 与 `dist/` 一样**不进包**。见 `NEXT_STEPS.md` 第 4 节 |
+| 5 · 打磨与上线 | 🔶 **进行中**：整页手感升级 + **抽牌仪式分拍改造**已完成；分享卡片图 / 分享 meta / 首屏预热 / `DRAW_MODE` 切 daily 已完成；**离线副本已移除**（v2 起只走 http）；**发布上线未做** —— 这是唯一实质待办，且需要用户本人选平台并登录 |
+| 6 · 交付打包 | 🔶 **形态已改**：交付改为**线上链接**（Q2 决策：静态托管 + git），不再发含离线副本的 zip。打包脚本保留给需要代码的人并已瘦身（去掉离线副本逻辑与 `--no-preview`）。旧包 `*-2026-09-19.zip` **已作废**（内容过时，且含已删除的离线副本） |
 
 
 ## 已定需求（除非用户改主意，不要再问第二遍）
@@ -46,11 +46,10 @@ tarot-app/
 ├─ PROJECT_STATE.md              本文档（进度事实）
 ├─ NEXT_STEPS.md                 ⭐ 剩余工作清单（待办、做法、成本、踩坑）
 ├─ README.md                     面向使用者的说明（换风格三步法写在这里）
-├─ 打开网站.cmd                  ⭐ 本地快捷方式：双击即用浏览器打开网站（**零依赖**，不需要 Node/服务器）
-├─ start-user-preview.cmd        完整模式：起本地 http 服务（含分享卡片）；需要 Node
-├─ 启动开发者版.cmd              ⭐ 开发者版：起 http 服务并打开 dist-dev/（带调试条，可测「生成分享卡片」）
-├─ dist-user/                    ⭐ 用户视角离线副本（`--base ./` 构建）：双击 index.html 即看；也是交付包里的预览
-├─ dist-dev/                     开发者版副本（同上，但用 `VITE_DEV_TOOLS=1` 构建）：**带调试条**，不进交付包
+├─ .git/ · .gitignore · .gitattributes   ✅ 版本控制（2026-09-19 建立）。
+│                                  `.gitignore` 排除 `_debug`/`previews`/`card-styles`/`_archive`/`dist*`；
+│                                  `.gitattributes` 把 `.cmd` 标为**不做任何换行转换**，配套 `core.autocrlf=false`
+│                                  （2026-09-19 前是 `.cmd` ×3 + `dist-user/` + `dist-dev/`，已随离线通道移除）
 ├─ _archive/                     🔒 **v1 冻结快照（只读保险，不是工作副本）**：本工程无版本控制，
 │                                  做破坏性改造前用 `scripts/freeze_snapshot.py` 封存。
 │                                  内有 `v1-2026-09-19/`（code 11.8 MB + art 104.2 MB 两个 zip + `SNAPSHOT.md` 清单）
@@ -64,16 +63,14 @@ tarot-app/
 │   ├─ shot.mjs                  ⭐ 无头截图 / 视觉自检（CDP 驱动本机 Chrome，零依赖；支持 --seed / --reduced）
 │   ├─ flows/                    ⭐ shot.mjs 用的流程脚本：reveal / share / welcome / welcome-frame /
 │   │                              ritual-frame（抽牌仪式四帧按状态取帧） / probe-draw-timeline /
-│   │                              offline-open / offline-share / audit-motion / audit-draw / audit-title
-│   ├─ lib/offline.mjs           ⭐ file:// 适配公共件：相对路径改写 + module→经典脚本 + 'use strict' + 通用自检
-│   │                              （dist-user / dist-dev 共用同一套，免得修个 bug 要改两遍）
-│   ├─ build_user_preview.mjs    ⭐ 生成用户视角副本 dist-user/（自检：三条离线 + 「产物不含调试条文案」）
-│   ├─ build_dev_preview.mjs     ⭐ 生成开发者版 dist-dev/（注入 `VITE_DEV_TOOLS=1`；自检是用户版第 4 条的**反面**）
-│   ├─ serve_user_preview.mjs    给离线副本起零依赖静态服务器（`--dir dist-dev` 可切开发者版；默认自动开浏览器）
-│   ├─ fix_cmd_encoding.py       ⭐ 把 .cmd/.bat 修正为 GBK + CRLF（`--check` 只检查）—— 见「本机环境注意事项」
+│   │                              dev-verify（开发模式自检，跑在 dev server 上，含命中测试）
+│   │                              / audit-motion / audit-draw / audit-title
+│   ├─ verify_manifest.mjs       ⭐ 按 `MANIFEST.sha256` 逐文件校验快照完整性（`node scripts/verify_manifest.mjs <目录>`）
+│   │                              —— 替代原先文档里那条五层转义的一行命令，见第 6 节第 31 条
 │   ├─ contact_sheet.py          总览拼版（22 张联络表，验收风格/边框一致性用）
-│   ├─ freeze_snapshot.py        ⭐ 冻结快照（无 git 工程的「版本保险」）：产出 code / art 两个 zip + `SNAPSHOT.md`
-│   └─ package_project.py        项目打包（完整包 / --light 轻量包 / --no-preview；打包前自检 .cmd）
+│   ├─ freeze_snapshot.py        ⭐ 冻结快照（「版本保险」，与 git **互补**）：产出 code / art 两个 zip + `SNAPSHOT.md`；
+│   │                              自检已从「`dist-user` 在不在」改为「关键文件齐不齐」（离线副本不再存在）
+│   └─ package_project.py        项目打包（完整包 / `--light` 轻量包；**不再含离线副本**）
 ├─ public/skins/<皮肤名>/        美术素材，按皮肤分目录
 │   ├─ hero-bg.webp              ✅ 已就位（v2 无球版：巫师双手托举、掌心留空）
 │   ├─ hero-orb.webp             ✅ 已就位（透明底水晶球，抠白底而来）
@@ -459,12 +456,10 @@ PY="C:/Users/29923/.workbuddy/binaries/python/envs/default/Scripts/python.exe"
 "$N" node_modules/vite/bin/vite.js            # 开发预览 http://127.0.0.1:5173
 "$N" node_modules/vite/bin/vite.js build      # 生产构建 → dist/（绝对路径，正式发布用）
 
-# ---- 离线副本：给「双击就能看」用（两份产物共用 scripts/lib/offline.mjs）----
-"$N" scripts/build_user_preview.mjs           # → dist-user/  用户视角（--base ./ + module→经典脚本 + 自检）
-"$N" scripts/build_dev_preview.mjs            # → dist-dev/   开发者版（VITE_DEV_TOOLS=1，带调试条）
-"$N" scripts/serve_user_preview.mjs           # 起 http 看 dist-user/（含分享卡片），默认自动开浏览器
-"$N" scripts/serve_user_preview.mjs 8099 --dir dist-dev    # 同上，但服务开发者版
-# 最省事：双击根目录  打开网站.cmd（用户版） / 启动开发者版.cmd（开发者版）
+# ---- 看「用户视角」（无调试条）----
+"$N" node_modules/vite/bin/vite.js preview    # 起本地 http 预览 dist/
+# ⚠️ 离线通道（dist-user / dist-dev / 三个 .cmd）已于 2026-09-19 整体移除，见第 6 节第 29 条
+# 线上地址见 NEXT_STEPS.md §2「发布上线」
 
 # ---- 美术素材流水线 ----
 "$PY" scripts/build_card_assets.py            # 牌面：去水印 + 裁切 + 导出 WebP + 合成预览
@@ -475,12 +470,9 @@ PY="C:/Users/29923/.workbuddy/binaries/python/envs/default/Scripts/python.exe"
 "$PY" scripts/contact_sheet.py                # 22 张原始插画总览
 "$PY" scripts/contact_sheet.py assets/previews assets/previews/contact-sheet-framed.png
 
-# ---- 打包（会先自检 .cmd 编码，不合格直接拒绝）----
-"$PY" scripts/fix_cmd_encoding.py --check     # 只检查 .cmd/.bat 是不是 GBK + CRLF
-"$PY" scripts/fix_cmd_encoding.py             # 不合格就修正（幂等，可反复跑）
+# ---- 打包（给需要看代码的人；交付主形态是线上链接）----
 "$PY" scripts/package_project.py              # 完整包（约 198 MB）
 "$PY" scripts/package_project.py --light      # 轻量包（约 23 MB）
-"$PY" scripts/package_project.py --no-preview # 不带 dist-user/（省 6 MB）
 ```
 
 > 图像处理用受管 Python 虚拟环境 `C:\Users\29923\.workbuddy\binaries\python\envs\default`（已装 Pillow）。
@@ -500,7 +492,9 @@ PY="C:/Users/29923/.workbuddy/binaries/python/envs/default/Scripts/python.exe"
     所以**不能靠退出码判断 .cmd 可用**；必须真的跑一遍
   - 编码若是 UTF-8，中文在 zh-CN 控制台上是乱码；而配 `chcp 65001` 又会串码。
     正确做法就是 GBK + CRLF，**不要 chcp**
-  - 修正/检查：`"$PY" scripts/fix_cmd_encoding.py [--check]`；`package_project.py` 已把它做成打包前置门槛
+  - ⚠️ `scripts/fix_cmd_encoding.py` 与这条「打包前置门槛」**已于 2026-09-19 随 `.cmd` 一并删除**
+    （工程里不再有 `.cmd`/`.bat`）。现在靠 `.gitattributes` 的 `*.cmd -text -diff` +
+    `core.autocrlf=false` 保护换行 —— 将来若再加 `.cmd`，这两条仍然适用
 - ⚠️ **桌面 COM 自动化被拦**：`New-Object -ComObject WScript.Shell` 会报
   「COM object instantiation can run arbitrary code」→ **建不了 `.lnk`**。
   退路是写纯文本 `.url`（`[InternetShortcut]` + `URL=file:///...`），
@@ -975,3 +969,44 @@ PY="C:/Users/29923/.workbuddy/binaries/python/envs/default/Scripts/python.exe"
       ③ 视差**只让球动**（球朝指针微转 + 高光位移，2D 层完全不动）；④ 手机**不做**跟随输入；
       ⑤ 主页**紫为底、冷蓝只给球**；⑥ 分享卡片**沿用 v1 的 2D 球素材**；⑦ 三处禁令现在就改写（已完成）
 
+- **2026-09-19（第十八轮 · 移除离线通道 + 建立版本控制）**
+
+  **用户决策（grilling 第 5 轮）**：Q1 全删离线通道 + 交付包只给线上链接 ｜ Q2 静态托管平台 + **现在就 `git init`** ｜
+  Q3 手在球前（遮挡 ≤ 球体投影 15%）｜ Q4 主视觉只出 1 张 ｜ Q5 出图时留一块**明显大于预期**的空位、出完图再量着定 ｜
+  Q6 共用 `perspective`，用在**入场动画**上（稳态 2D 层不动）。
+
+  **① `git init` + v1 基线**（本次最有价值的一步）：118 文件 / 70.92 MB，首个提交 `bb0ad52`。
+  `.gitignore` 只排除**可再生成**与**本机临时**两类（`_debug` 220 MB / `previews` 82 MB / `card-styles` 39 MB /
+  `_archive` 134 MB / `dist*`），**素材母版一律入库**（`card-art` 56.9 MB + `hero-art` + `concept` + `public`）。
+  `.gitattributes` 把 `.cmd` 标为 `-text -diff` 并设 `core.autocrlf=false` —— 入库字节与磁盘字节**逐字节核对过一致**
+  （三个 `.cmd` 的 sha256 相同、CRLF 保留、裸 LF 为 0），这条守的是「`.cmd` 必须 GBK + CRLF」那条老坑。
+
+  **② 离线通道整体删除**（Q1=甲）：`scripts/lib/offline.mjs` · `build_user_preview.mjs` · `build_dev_preview.mjs` ·
+  `serve_user_preview.mjs` · `fix_cmd_encoding.py` · `打开网站.cmd` · `start-user-preview.cmd` · `启动开发者版.cmd` ·
+  `flows/offline-open.js` · `flows/offline-share.js`；`dist-user/` 与 `dist-dev/` 移到 `_archive/_removed-2026-09-19/`
+  （本机删目录不可信，见坑第 30 条）。**连带改掉 6 处**：`package.json` 去掉 `user:build`/`user:serve`；
+  `vite.config.js` 的 `__DEV_TOOLS__` 收敛为 `command === 'serve'`（去掉 `VITE_DEV_TOOLS` 分支）；
+  `ShareDialog.jsx` 去掉 `file://` 报错分支及那句指向 `.cmd` 的提示；`package_project.py` 去掉离线副本与 `.cmd` 前置自检；
+  `freeze_snapshot.py` 去掉对 `dist-user` 的**硬断言**（否则下次冻结报假警报）；`flows/dev-verify.js` 目标改为 dev server。
+  `--base` 参数**保留** —— 站点子目录部署仍需它。
+
+  **③ 新增 `scripts/verify_manifest.mjs`**：替代快照清单里那条「五层转义」的 `node -e` 一行命令
+  （实测渲染出的反斜杠数量偏了 → 命令长得对但切不出行、静默报「核对 0 个文件」= **永远绿灯的假检查**）。
+  新脚本零转义层，且「一条记录都没核对到」时**报错而不是报通过**。**正反两向都验过**：
+  真实 v1 快照 122 文件 / 0 不一致；三合一样本（正常 / 被改 / 缺失）逐项报准 ——
+  反向测试当场抓出脚本自己的真 bug（Windows 行尾 `\r` 被拼进路径，连正常文件都报缺失）。
+
+  **④ 文档手术**：`NEXT_STEPS.md` §0（运行方式、用户视角、回到 v1）与 §1 完成度表、§2 P0、§6 新增第 30/31 条；
+  `README.md` 运行与命令段；`DRAW_RITUAL_BRIEF.md` 守则第 8 条/负面清单/清单项就地标注作废；
+  `PROJECT_STATE.md` 目录结构、常用命令、阶段表、本机注意事项。改法：写了**锚点式批量改文档工具**
+  （按「起始行前缀 → 结束行前缀」定位 + 唯一性断言），因为行号在编辑中会漂移，按行号改等于埋雷。
+
+  **验收**：`vite build` 通过（产物 JS **290.14 KiB**、CSS 33.88 KiB）；生产产物在
+  `vite preview`（http://127.0.0.1:4180/）上**真跑**：`reveal.js` → 球命中、四张素材全加载（含抽到的 `major-18.webp` 月亮）；
+  `share.js` → 分享卡片出图 1080×1920 / blob 227 kB / 保存按钮可点（**验证了被改的 `ShareDialog` 没坏**）。
+  静态四项核查全通过：`isFileProtocol` 零残留、`skin.js` 的 `BASE` 声明仍在、正式产物 0 处调试条文案、
+  用户可见文案不再有已删除入口的指引。
+
+  **⚠️ 遗留**：① 上线平台未选、账号未登录（需用户本人操作）；② 旧交付包 `*-2026-09-19.zip` 已作废
+  （内容过时且含已删除的离线副本），要发人用新的打包命令重打；③ 在真正上线前，能给人看的通道只有
+  `vite dev` / `vite preview`，两者都要求对方装 Node —— 这是 Q1=甲 的既定代价。

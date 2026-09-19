@@ -15,10 +15,10 @@ export const SKIN = 'mist-night'
  * 打开时页面左下角有调试条：切换不限次数 / 重置今日 / 重播迎接 / 牌面总览。
  *   本地开发（vite dev）            → 开
  *   正式构建（vite build）          → 关，连代码都被摇掉
- *   开发者版（VITE_DEV_TOOLS=1）    → 开（scripts/build_dev_preview.mjs 产出 dist-dev/）
+ *   2026-09-19 起只剩这两种取值：产物只走 http，调试条专属于本地开发。
  *
  * 关掉时 `DEV_TOOLS` 在产物里是**字面量 false**，Rollup 据此把
- * `DEV_TOOLS && <DevBar/>` 整支分支摇掉（连组件代码都不残留，自检见 build_user_preview.mjs 第 (d) 项）。
+ * `DEV_TOOLS && <DevBar/>` 整支分支摇掉（连组件代码都不残留）。
  *
  * 所以这里刻意**不写 `typeof` 兜底** —— 那会让表达式无法被静态折叠，摇不掉就从「少个调试条」
  * 退化成了「正式包里带着调试条」。符号由 vite.config.js 的 define 注入，
@@ -34,8 +34,8 @@ export const DRAW_MODE = 'daily'
 /**
  * 页面打开时的初始模式。
  *
- * 开发者版默认就是「不限次数」—— 打开即可连抽，不用先去调试条上点一下；
- * 正式版仍是 DRAW_MODE（一天锁一次）。
+ * 本地开发（`vite dev`）默认就是「不限次数」—— 打开即可连抽，不用先去调试条上点一下；
+ * 正式产物仍是 DRAW_MODE（一天锁一次）。
  */
 export const INITIAL_MODE = DEV_TOOLS ? 'unlimited' : DRAW_MODE
 

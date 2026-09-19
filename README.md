@@ -8,24 +8,20 @@ Vite + React 18 + Tailwind CSS 4 + Framer Motion，**零后端**，抽牌记录�
 
 ## 运行
 
-**只想看看它长什么样**：双击根目录的 `打开网站.cmd` —— 零依赖，不需要装任何东西，
-浏览器直接打开网站（看到的界面和线上一致，没有开发用的调试条）。
-
-需要开发或改动时：
-
 ```bash
 npm install
-npm run dev      # 开发预览 http://127.0.0.1:5173
+npm run dev      # 开发预览 http://127.0.0.1:5173（左下角带调试条）
 npm run build    # 生产构建 → dist/（绝对路径，正式发布用）
-
-npm run user:build   # 生成离线副本 dist-user/（双击 index.html 即开）
-npm run user:serve   # 给 dist-user/ 起本地服务器并打开浏览器（含分享卡片功能）
+npm run preview  # 本地 http 预览 dist/，即「用户视角」：无调试条、无牌面总览
 ```
 
-> `dist-user/` 与 `dist/` 的区别：前者用 `--base ./` 构建、脚本改成经典脚本，
-> **双击就能在本地打开**（`file://`），也能丢到服务器任意子目录；
-> 后者是给静态服务器正式发布用的。唯一差异是 `file://` 下「生成分享卡片」会被浏览器拦
-> （画布污染限制），需要它就走 `start-user-preview.cmd` 的 http 模式。
+> **本项目只走 http**（2026-09-19 v2 起）。原先那套「双击 `.cmd` / 双击 `dist-user/index.html`
+> 免服务器直看」的离线通道已整体移除 —— 起因是 v2 要上真 3D，而 `file://` 下本地图片
+> **不能当 WebGL 纹理**（实测 `SecurityError: image element contains cross-origin data`），
+> 离线副本与新主视觉无法共存。v1 的离线副本仍完整保留在冻结快照 `_archive/v1-2026-09-19/` 里。
+>
+> 素材基址跟随 Vite 的 `base`（源码见 `src/config/skin.js` 的 `BASE`），
+> 所以用 `vite build --base ./` 构建的产物也能丢到服务器任意子目录。
 
 ## 目录结构
 
@@ -256,12 +252,11 @@ PY="C:/Users/29923/.workbuddy/binaries/python/envs/default/Scripts/python.exe"
 "$PY" scripts/verify_card_assets.py      # 验收：卡框是否有透明洞 + 22 张牌面是否有残留浅色边带
 "$PY" scripts/contact_sheet.py           # 22 张原始插画总览
 "$PY" scripts/preview_hero.py            # 不开浏览器，纯 Python 复现底板定位数学，合成主视觉预览
-"$PY" scripts/fix_cmd_encoding.py --check  # 检查 .cmd/.bat 是否 GBK + CRLF（不合格双击就是坏的）
-"$PY" scripts/package_project.py         # 打包（--light 轻量包 / --no-preview 不带离线副本）
+"$PY" scripts/package_project.py         # 打包（--light 轻量包）
 
-# 离线副本（给「双击就能看」用）
-node scripts/build_user_preview.mjs      # → dist-user/：--base ./ + module→经典脚本 + 四道自检
-node scripts/serve_user_preview.mjs      # 起 http 看同一份产物，默认自动开浏览器
+# git / 快照校验（2026-09-19 起）
+git log --oneline                        # bb0ad52 = v1 基线（v2 动工前的完整状态）
+node scripts/verify_manifest.mjs <目录>   # 校验快照 zip 解出来的目录是否完好（传目标目录）
 
 # 无头截图 QA（零依赖，直接驱动本机已装的 Chrome/Edge）
 node scripts/shot.mjs http://127.0.0.1:5173/ assets/previews/screen.png --w 1600 --h 900 \
