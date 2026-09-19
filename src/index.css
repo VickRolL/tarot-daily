@@ -1,0 +1,2031 @@
+@import 'tailwindcss';
+
+/* ==========================================================
+   主题变量 —— 换风格时主要改这里（主色 / 光晕 / 雾气浓度）
+   对应 public/skins/<皮肤名>/ 下的素材
+   ========================================================== */
+:root {
+  --ink: #08050f;
+  --ink-2: #150c2b;
+  --violet-deep: #2b1a52;
+  --violet: #7c5cd6;
+  --glow: #c9b4ff;
+  --gold: #e8c98a;
+  --text: #efe9ff;
+  --text-dim: rgba(239, 233, 255, 0.6);
+  --text-faint: rgba(239, 233, 255, 0.36);
+  --line: rgba(201, 180, 255, 0.18);
+  --mist-alpha: 0.5;
+  --font-display: 'Noto Serif SC', 'Source Han Serif SC', 'Songti SC', 'STSong', 'SimSun', serif;
+  --font-body: 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--ink);
+  color: var(--text);
+  font-family: var(--font-body);
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ============================ 场景 ============================ */
+.scene {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--ink);
+}
+
+/* ==================== 主视觉底板（图像坐标系） ====================
+   主视觉与所有拆层素材（巫师人物 / 水晶球）都放在这块底板里。
+   底板尺寸只由视口决定、比例固定 3:2，图像 1:1 铺满不裁剪，
+   所以底板内部就是图像自身的坐标系 —— 叠层百分比 = 图像百分比，天然对齐。
+   若沿用 `background-size: cover`，图像会被按视口比例裁剪缩放，
+   叠层就会整体偏掉（实测 16:9 下球心偏 +6.5% 画高）。
+   横纵都外扩 var(--hero-bleed) 是为了呼吸缩放时不露边。
+
+   分两层的原因：定位靠 `transform: translate(-50%, -30%)`，
+   而入场动画与呼吸动画也在写 `transform: scale()` —— 同一元素上会互相覆盖。
+   所以 .hero-frame 只负责「定位 + 定尺寸 + 提供容器查询上下文」，
+   .hero-plate 只负责「动画」。水晶球挂在 frame 上，不跟着底板缩放，
+   否则呼吸动画会让可点击的球一直在慢慢长大缩小。 */
+.hero-frame {
+  position: absolute;
+  left: 50%;
+  top: var(--hero-pos-y, 30%);
+  width: max(
+    calc(100vw + var(--hero-bleed, 4) * 1vw),
+    calc((100vh + var(--hero-bleed, 4) * 1vh) * var(--hero-aspect-num, 1.5))
+  );
+  aspect-ratio: var(--hero-aspect, 3 / 2);
+  transform: translate(-50%, var(--hero-pos-y-inv, -30%));
+  /* 让球这一层能用 cqh：1cqh = 画布高的 1%，换视口比例也不会错位 */
+  container-type: size;
+}
+
+.hero-plate {
+  position: absolute;
+  inset: 0;
+  will-change: transform, filter;
+}
+
+.hero-frame--fallback::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(ellipse at 50% 40%, #3a2470 0%, #1b0f38 45%, #08050f 100%);
+}
+
+/* 底板内的素材层：一律 1:1 铺满画布，不做任何裁剪或拉伸 */
+.hero-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  display: block;
+  pointer-events: none;
+}
+
+/* 主视觉背景层：承载低清占位图（LQIP），未加载完时先显示模糊底 */
+.hero-layer--bg {
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+}
+
+/* 巫师人物层：透明底，与主视觉同帧，叠在背景之上、水晶球之下 */
+.hero-layer--figure {
+  z-index: 1;
+}
+
+.scene__vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at 50% 42%, transparent 30%, rgba(8, 5, 15, 0.55) 72%, rgba(8, 5, 15, 0.94) 100%),
+    linear-gradient(to bottom, rgba(8, 5, 15, 0.72) 0%, transparent 22%, transparent 58%, rgba(8, 5, 15, 0.92) 100%);
+}
+
+.scene__grain {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.35;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+  background-size: 3px 3px;
+}
+
+/* 蓄势压暗层（2026-09-19）
+   --------------------------------------------------------------------------
+   独立图层，**不要去改 .scene__vignette** —— 它的 opacity 默认就是 1，没有加深的余地。
+   只在 `.scene--charging` 时压下来，释放（drawing）时自行淡出：
+   把类去掉即触发回到 0，所以不需要第二条规则。
+   层级压在 .scene__vignette 之上、.stage(40) 之下 —— 场景变暗，标题与牌保持亮度。 */
+.scene__charge-dim {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(
+    ellipse at 50% 62%,
+    transparent 16%,
+    rgba(8, 5, 15, 0.5) 56%,
+    rgba(5, 3, 10, 0.94) 100%
+  );
+  transition: opacity 900ms cubic-bezier(0.7, 0, 0.84, 0);
+}
+
+.scene--charging .scene__charge-dim {
+  opacity: 0.45;
+  transition-duration: var(--rite-charge, 1000ms);
+  /* 与蓄势同族曲线：慢起、末端加速，读作「攒劲」 */
+  transition-timing-function: cubic-bezier(0.55, 0, 0.85, 0.25);
+}
+
+/* ============================ 雾气层 ============================ */
+.mist {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  opacity: var(--mist-alpha);
+  /* 蓄势期雾会变浓（见 .mist--intense）。用 transition 做渐变而不是改
+     animation-duration —— 改 duration 会让正在跑的关键帧按新时长重算进度，
+     雾带会**瞬间跳一下**（进度 = 已用时长 / 新时长）。 */
+  transition: opacity 900ms ease, filter 900ms ease;
+}
+
+/* ① 蓄势：雾「揪紧」—— 浓度提高、亮度略提。这是「环境对事件做出反应」里
+   性价比最高的一条：环境一动不动，事件读起来就像贴在画面上的贴纸。 */
+.mist--intense {
+  /* --mist-alpha 默认 0.5（见 :root），×1.7 = 0.85 */
+  opacity: calc(var(--mist-alpha, 0.5) * 1.7);
+  filter: brightness(1.22) saturate(1.08);
+}
+
+.mist__band {
+  position: absolute;
+  left: -60%;
+  width: 220%;
+  height: 42%;
+  filter: blur(38px);
+  background: radial-gradient(ellipse at 50% 50%, var(--glow) 0%, rgba(124, 92, 214, 0.35) 42%, transparent 72%);
+  opacity: 0.5;
+}
+
+.mist__band--1 {
+  top: 8%;
+  animation: mistDrift 46s linear infinite;
+  opacity: 0.42;
+}
+
+.mist__band--2 {
+  top: 46%;
+  height: 34%;
+  animation: mistDrift 62s linear infinite reverse;
+  opacity: 0.3;
+}
+
+.mist__band--3 {
+  bottom: -6%;
+  height: 30%;
+  animation: mistDrift 78s linear infinite;
+  opacity: 0.24;
+}
+
+@keyframes mistDrift {
+  from {
+    transform: translateX(-12%);
+  }
+  to {
+    transform: translateX(12%);
+  }
+}
+
+/* ============================ 粒子 ============================ */
+.particles {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* ============================ 水晶球 ============================
+   位置与大小全部来自 src/config/skin.js 的 ANCHORS.orb，用的是**主视觉画布的百分比**：
+   本元素是 .hero-plate 的子元素，所以 left/top 的百分比 = 图像里的百分比，
+   尺寸用 cqh 表示画布高的百分比。换素材后只改 skin.js 的三个数字即可。 */
+.orb {
+  position: absolute;
+  left: var(--orb-x, 50%);
+  top: var(--orb-y, 62%);
+  width: var(--orb-size, 37cqh);
+  height: var(--orb-size, 37cqh);
+  /* ⚠️ 定位的 translate(-50%,-50%) 必须始终在 transform 里 —— 下面的
+     hover / active / released 都只改 scale 分量，不能把 translate 覆盖掉，
+     否则球会瞬间跳到右下角。 */
+  transform: translate(-50%, -50%) scale(1);
+  transform-origin: 50% 50%;
+  /* 反馈要「压在按下那一刻」，所以 transition 只给 90–180ms 级；
+     缓动取 slam（快到位），读起来是有重量的按压而不是缓动滑行。 */
+  transition: transform 90ms cubic-bezier(0.2, 0.9, 0.2, 1);
+  z-index: 2;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  background: none;
+  border: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* 悬停：微涨 + 光环提亮（读成「可以点我」）。180ms 比按下的 90ms 慢，
+   于是「靠近 → 悬停」是柔和的，「悬停 → 按下」是利落的。
+   ⚠️ 提亮用 filter 而不是 opacity —— .orb__glow 的 opacity 归关键帧 orbBreath 管，
+   静态声明会被动画压掉（写 opacity 是没效果的）。 */
+@media (hover: hover) and (pointer: fine) {
+  .orb:not(:disabled):hover {
+    transform: translate(-50%, -50%) scale(1.03);
+    transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .orb:not(:disabled):hover .orb__glow {
+    filter: brightness(1.28) saturate(1.1);
+  }
+  .orb:not(:disabled):hover .orb__ring {
+    border-color: rgba(201, 180, 255, 0.72);
+  }
+}
+
+/* 按下：立刻缩到 0.955。这是「跟手」的来源 —— 反馈不能排在计时器上。 */
+.orb:not(:disabled):active {
+  transform: translate(-50%, -50%) scale(0.955);
+  transition: transform 90ms cubic-bezier(0.2, 0.9, 0.2, 1);
+}
+
+/* 松开回弹：从 1.06 落回 1.0，260ms 的落定曲线 —— 先缩再弹，手感不是一块被压扁的贴图。
+   ⚠️ 用 .orb.orb--released 提高特异性：否则会输给上面的 `.orb:not(:disabled):active`，
+   出现「松手要先弹回 1.0 再缩一下」的抽搐。 */
+.orb.orb--released {
+  animation: orbRelease 260ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: none;
+}
+
+@keyframes orbRelease {
+  0% {
+    transform: translate(-50%, -50%) scale(1.06);
+  }
+  55% {
+    transform: translate(-50%, -50%) scale(0.985);
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+/* ① 蓄势：球充能（2026-09-19）
+   --------------------------------------------------------------------------
+   ⚠️ 两条硬约束，改了就会出问题：
+   1. **必须写在 `.orb.orb--released` 之后，且用同等特异性（两个类）。**
+      上一轮踩过的坑：`.orb.orb--released` 输给 `.orb:not(:disabled):active`
+      导致「松手先弹回再缩一下」的抽搐 —— 这里同理，
+      而 `released` 与 `charging` 会**共存 260ms**（回弹还没走完就进了蓄势），
+      两个 `animation` 互相覆盖，谁在后面谁接管。
+   2. **transform 必须始终包含 `translate(-50%, -50%)`** —— 球靠它定位，漏了会瞬间跳到右下角。
+      所以下面每条关键帧都带完整 transform。
+
+   起手值 1.045 刻意接在回弹起点 1.06 附近：即使 charging 立刻接管，
+   也不会出现「先弹回 1.0 再缩一下」的抽搐。
+   末尾收到 1.0 而不是停在 1.05：释放那一帧（drawing）会摘掉这个类，
+   停在膨胀值上会「啪」地缩回来；收到 1.0 就是连续的。 */
+.orb.orb--charging {
+  animation: orbCharge var(--rite-charge, 1000ms) cubic-bezier(0.55, 0, 0.85, 0.25) both;
+  transition: none;
+}
+
+@keyframes orbCharge {
+  0% {
+    transform: translate(-50%, -50%) scale(1.045);
+  }
+  20% {
+    transform: translate(-50%, -50%) scale(0.985);
+  }
+  52% {
+    transform: translate(-50%, -50%) scale(1.018);
+  }
+  78% {
+    transform: translate(-50%, -50%) scale(1.05);
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+/* 充能环：从外向内收束 + 提亮 —— 读作「把光收进球里」。缺省 opacity 0，
+   所以非蓄势期它完全不可见（不必额外写 display 开关）。 */
+.orb__charge {
+  position: absolute;
+  inset: -18%;
+  border-radius: 50%;
+  pointer-events: none;
+  opacity: 0;
+  border: 1px solid rgba(233, 224, 255, 0.5);
+  background: radial-gradient(circle, transparent 50%, rgba(201, 180, 255, 0.5) 66%, transparent 82%);
+}
+
+.orb.orb--charging .orb__charge {
+  animation: orbChargeRing var(--rite-charge, 1000ms) cubic-bezier(0.55, 0, 0.85, 0.25) both;
+}
+
+@keyframes orbChargeRing {
+  0% {
+    transform: scale(1.55);
+    opacity: 0;
+  }
+  35% {
+    opacity: 0.5;
+  }
+  80% {
+    transform: scale(1.02);
+    opacity: 0.92;
+  }
+  100% {
+    transform: scale(0.93);
+    opacity: 0.28;
+  }
+}
+
+/* 蓄势期球体本身也提亮（`filter` 而不是 `opacity`：光环的 opacity 归关键帧管，
+   静态声明会被动画压掉 —— 见上面 :hover 那条注释） */
+.orb.orb--charging .orb__glow {
+  filter: brightness(1.45) saturate(1.15);
+}
+
+.orb.orb--charging .orb__body {
+  box-shadow:
+    inset 0 0 46px rgba(233, 224, 255, 0.7),
+    0 0 92px rgba(124, 92, 214, 0.62);
+}
+
+/* 键盘焦点环：无障碍要求，不是装饰。用 outline 而不是 box-shadow，
+   免得和球的发光阴影互相遮挡。 */
+.orb:focus-visible {
+  outline: 2px solid var(--glow);
+  outline-offset: 6px;
+  border-radius: 50%;
+}
+
+.orb:disabled {
+  cursor: default;
+}
+
+.orb__hit {
+  position: absolute;
+  inset: -14%;
+  border-radius: 50%;
+}
+
+.orb__glow {
+  position: absolute;
+  inset: -46%;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(201, 180, 255, 0.5) 0%, rgba(124, 92, 214, 0.26) 34%, transparent 68%);
+  animation: orbBreath 5.5s ease-in-out infinite;
+}
+
+@keyframes orbBreath {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.72;
+  }
+  50% {
+    transform: scale(1.09);
+    opacity: 1;
+  }
+}
+
+.orb__ring {
+  position: absolute;
+  inset: -6%;
+  border-radius: 50%;
+  border: 1px solid rgba(201, 180, 255, 0.45);
+  animation: orbRing 4.2s ease-out infinite;
+}
+
+.orb__ring--delayed {
+  animation-delay: 2.1s;
+}
+
+@keyframes orbRing {
+  0% {
+    transform: scale(0.86);
+    opacity: 0;
+  }
+  22% {
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(1.3);
+    opacity: 0;
+  }
+}
+
+.orb__body {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  overflow: hidden;
+  background: radial-gradient(circle at 34% 28%, rgba(233, 224, 255, 0.9) 0%, rgba(140, 108, 226, 0.6) 26%, rgba(43, 26, 82, 0.92) 62%, rgba(14, 8, 28, 0.96) 100%);
+  box-shadow:
+    inset 0 0 40px rgba(201, 180, 255, 0.55),
+    0 0 60px rgba(124, 92, 214, 0.42);
+}
+
+.orb__swirl {
+  position: absolute;
+  inset: -30%;
+  background:
+    conic-gradient(
+      from 0deg,
+      transparent 0deg,
+      rgba(201, 180, 255, 0.5) 60deg,
+      transparent 130deg,
+      rgba(124, 92, 214, 0.45) 220deg,
+      transparent 300deg
+    );
+  filter: blur(14px);
+  animation: orbSwirl 26s linear infinite;
+}
+
+@keyframes orbSwirl {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.orb__nebula {
+  position: absolute;
+  inset: 6%;
+  border-radius: 50%;
+  background:
+    radial-gradient(ellipse at 62% 40%, rgba(255, 240, 210, 0.85) 0%, rgba(201, 180, 255, 0.5) 22%, transparent 52%),
+    radial-gradient(ellipse at 34% 66%, rgba(124, 92, 214, 0.7) 0%, transparent 58%);
+  filter: blur(6px);
+  animation: orbNebula 9s ease-in-out infinite alternate;
+}
+
+@keyframes orbNebula {
+  from {
+    transform: translate3d(-3%, 2%, 0) scale(1.02);
+    opacity: 0.82;
+  }
+  to {
+    transform: translate3d(4%, -3%, 0) scale(1.12);
+    opacity: 1;
+  }
+}
+
+.orb__sheen {
+  position: absolute;
+  left: 16%;
+  top: 12%;
+  width: 34%;
+  height: 24%;
+  border-radius: 50%;
+  background: radial-gradient(ellipse, rgba(255, 255, 255, 0.8) 0%, transparent 70%);
+  filter: blur(4px);
+  opacity: 0.66;
+  z-index: 2;
+}
+
+/* 水晶球美术层（hero-orb 透明底素材）：压在代码绘制的漩涡/星云之上，
+   但要在高光之下 —— 高光不跟着转，玻璃球才不会像贴图被整体旋转。
+   72s 一圈，慢到只觉得球里在动，不会看出「图在转」。 */
+.orb__art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  pointer-events: none;
+  z-index: 1;
+  animation: orbArtSpin 72s linear infinite;
+}
+
+@keyframes orbArtSpin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.orb__label {
+  position: absolute;
+  left: 50%;
+  bottom: -22%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-size: 13px;
+  letter-spacing: 0.32em;
+  color: var(--text-dim);
+  animation: labelBreath 3.4s ease-in-out infinite;
+}
+
+@keyframes labelBreath {
+  0%,
+  100% {
+    opacity: 0.42;
+  }
+  50% {
+    opacity: 0.95;
+  }
+}
+
+/* ============================ 顶部文字 ============================ */
+.topbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 22px 28px;
+  font-size: 12px;
+  letter-spacing: 0.22em;
+  color: var(--text-faint);
+}
+
+.topbar__brand {
+  font-family: var(--font-display);
+  color: var(--text-dim);
+  letter-spacing: 0.34em;
+}
+
+/* 标题带（「今夜一签」+ 副标题）
+   --------------------------------------------------------------------------
+   2026-09-18 修：标题曾被抽出的卡牌盖住 —— 实测桌面端标题被盖 42.9px、
+   副标题整行（19.5px）被吃掉，合计 74.4px。原因是 .stage 的 z-index 40
+   高于 .headline 的 20，而标题带原本用 `top: 13%` 从视口顶部往下排，
+   卡牌顶边（38.5% − self-half = 15.5%）正好侵入标题带。
+
+   解法：标题带**改为从卡牌顶边往上锚定**，不再从视口顶往下排。
+   卡牌顶边的算法是 `--stage-anchor-y - --card-height-half`，全部取自 skin.js，
+   于是「卡牌变高 / 锚点下移」时标题会自动跟着让位，不会再撞上。
+   变量在 applySkinVars() 里灌入（见 src/config/skin.js）。
+
+   顶部还有第二道约束：不能压到 .topbar（文字底边约 4.6% 处）。
+   所以标题字号与行距都收紧，让它整块能塞进「顶栏底边 → 卡牌顶边」这条窄带里。 */
+.headline {
+  position: absolute;
+  left: 0;
+  right: 0;
+  /* 底边贴着卡牌上方留出 --title-gap，而不是从顶部往下排 */
+  bottom: calc(100% - var(--stage-anchor-y) + var(--card-height-half) + var(--title-gap));
+  top: auto;
+  z-index: 20;
+  text-align: center;
+  pointer-events: none;
+}
+
+.headline__title {
+  font-family: var(--font-display);
+  font-size: clamp(24px, 3vw, 36px);
+  letter-spacing: 0.42em;
+  /* 上下间距收紧（原来 margin-bottom 12px），好让标题带塞进 topbar 与卡牌之间 */
+  margin: 0 0 7px;
+  text-indent: 0.42em;
+  color: var(--text);
+  text-shadow: 0 0 26px rgba(124, 92, 214, 0.7);
+  line-height: 1.06;
+}
+
+.headline__sub {
+  font-size: 13px;
+  letter-spacing: 0.26em;
+  color: var(--text-dim);
+  margin: 0;
+  line-height: 1.2;
+}
+
+/* ============================ 牌 ============================ */
+.stage {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  pointer-events: none;
+  /* ⚠️ 翻牌的命门：`perspective` 只作用于**直接子元素**。
+     .stage__anchor 是它的直接子元素，.card 在其下两层 —— framer 会把
+     动画 transform 直接写在 .card 上，而 .card 与 .stage__anchor 之间没有
+     其它 transform 层，所以透视能正确作用到卡牌上。
+     升级前这里**没有 perspective**，rotateY 变成正交投影，
+     180° 翻转看起来像「横向压扁再张开」而不是绕轴转身 —— 这是翻牌显廉价的根因。
+     1400px 是长焦：变形含蓄、有体块感，不会变鱼眼。 */
+  perspective: 1400px;
+  perspective-origin: 50% 50%;
+}
+
+.stage__anchor {
+  position: absolute;
+  transform: translate(-50%, -50%);
+}
+
+.card {
+  position: relative;
+  /* 高度取自 skin.js 的 CARD_HEIGHT（标题带靠 --card-height-half 算让位位置，
+     两边必须同源；改高度只改 skin.js 一处）。 */
+  height: var(--card-height, min(46vh, 420px));
+  /* 比例跟着卡框走：--card-aspect 由 src/config/skin.js 灌入 */
+  aspect-ratio: var(--card-aspect, 3 / 5);
+  transform-style: preserve-3d;
+}
+
+.card__flip {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+}
+
+/* 侧向背光：牌转到侧面时整块压暗，正对镜头时几乎不可见。
+   高度超出卡牌一点，免得旋转中露出边缘。 */
+.card__eclipse {
+  position: absolute;
+  inset: -6%;
+  z-index: 3;
+  pointer-events: none;
+  border-radius: 12px;
+  background: linear-gradient(
+    90deg,
+    rgba(0, 0, 0, 0.55) 0%,
+    rgba(0, 0, 0, 0.22) 22%,
+    rgba(0, 0, 0, 0.04) 50%,
+    rgba(0, 0, 0, 0.22) 78%,
+    rgba(0, 0, 0, 0.55) 100%
+  );
+  mix-blend-mode: multiply;
+}
+
+/* 牌后辉光（2026-09-19 抽牌仪式分拍新增）
+   --------------------------------------------------------------------------
+   「④ 悬停」这一拍牌是**不动的**，靠它来表达「还活着、还在被托着」。
+   纯 CSS 渐变 + 两段 opacity 动画（外层跟随仪式推进，内层 1.3s 呼吸），不加素材。
+
+   ⚠️ `translateZ(-60px)`：`.card` 是 `preserve-3d` 容器，翻转时牌面会绕 z=0
+   平面来回穿过 —— 不把辉光推远，它就会从牌面中间透出来。 */
+.card__halo {
+  position: absolute;
+  inset: -28%;
+  pointer-events: none;
+  border-radius: 50%;
+  transform: translateZ(-60px);
+  filter: blur(6px);
+  background: radial-gradient(
+    ellipse at 50% 50%,
+    rgba(201, 180, 255, 0.5) 0%,
+    rgba(124, 92, 214, 0.26) 38%,
+    transparent 70%
+  );
+}
+
+.card__halo-core {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(
+    ellipse at 50% 50%,
+    rgba(255, 244, 214, 0.44) 0%,
+    rgba(201, 180, 255, 0.22) 30%,
+    transparent 64%
+  );
+  /* 悬停拍一个来回 1.3s —— 慢到只觉得「在呼吸」，不会读成闪烁 */
+  animation: haloPulse 1.3s ease-in-out infinite;
+}
+
+@keyframes haloPulse {
+  0%,
+  100% {
+    transform: scale(0.985);
+    opacity: 0.42;
+  }
+  50% {
+    transform: scale(1.045);
+    opacity: 0.85;
+  }
+}
+
+/* 高光扫过：一条窄斜带从左掠过牌面，翻牌关键帧的「点亮」。
+   容器 overflow 由 .card 之外不裁切，所以自带圆角遮罩观感即可。 */
+.card__sheen-sweep {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+  border-radius: 10px;
+  background: linear-gradient(
+    100deg,
+    transparent 0%,
+    transparent 38%,
+    rgba(255, 252, 255, 0.72) 50%,
+    transparent 62%,
+    transparent 100%
+  );
+}
+
+.card__side {
+  position: absolute;
+  inset: 0;
+  backface-visibility: hidden;
+  overflow: hidden;
+  /* 让牌面内部可用 cqh 单位，字号随卡牌尺寸自动缩放 */
+  container-type: size;
+}
+
+.card__back {
+  /* 牌背只覆盖卡片本体，不含右下角吊牌探出的透明留白 */
+  inset: var(--body-top, 0%) var(--body-right, 0%) var(--body-bottom, 0%) var(--body-left, 0%);
+  border-radius: 10px;
+  background:
+    radial-gradient(circle at 50% 50%, rgba(124, 92, 214, 0.5) 0%, transparent 62%),
+    linear-gradient(160deg, #2b1a52 0%, #150c2b 60%, #0d0720 100%);
+  border: 1px solid rgba(201, 180, 255, 0.35);
+  box-shadow: 0 0 46px rgba(124, 92, 214, 0.45);
+  display: grid;
+  place-items: center;
+}
+
+.card__back-mark {
+  width: 46%;
+  aspect-ratio: 1;
+  border: 1px solid rgba(201, 180, 255, 0.42);
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: var(--gold);
+  font-family: var(--font-display);
+  font-size: 22px;
+  letter-spacing: 0.1em;
+}
+
+/* 牌背美术层（card-back 素材）：1:1 铺满卡片本体；
+   素材就位时把代码绘制的底纹与描边让给它，缺图时自动退回原来的 CSS 牌背 */
+.card__back-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  pointer-events: none;
+}
+
+.card__back--art {
+  background: none;
+  border-color: transparent;
+  box-shadow: 0 0 46px rgba(124, 92, 214, 0.45);
+}
+
+.card__face {
+  transform: rotateY(180deg);
+  background-color: #120a24;
+  border: 1px solid rgba(201, 180, 255, 0.5);
+  box-shadow: 0 0 50px rgba(124, 92, 214, 0.5);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 24px 18px;
+}
+
+.card__face--art {
+  justify-content: flex-start;
+  padding: 0;
+}
+
+/* ---------- 牌面第 1 层：插画 ---------- */
+.card__art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  /* 卡框在卡片本体之外（右下角吊牌那一带）是透明的，
+     插画要按卡片本体裁掉，否则会从留白处漏出来 */
+  clip-path: inset(
+    var(--body-top, 0%) var(--body-right, 0%) var(--body-bottom, 0%) var(--body-left, 0%)
+  );
+}
+
+.card__art--fallback {
+  background:
+    radial-gradient(circle at 50% 34%, rgba(124, 92, 214, 0.55) 0%, transparent 62%),
+    linear-gradient(160deg, #2b1a52 0%, #150c2b 60%, #0d0720 100%);
+}
+
+/* ---------- 牌面第 2 层：统一卡框（22 张共用一张素材） ---------- */
+.card__frame-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  /* 卡牌比例由脚本按卡框素材实测比例设置，这里 1:1 铺满，不做任何拉伸变形 */
+  object-fit: fill;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.card__frame {
+  position: absolute;
+  inset: 10px;
+  border: 1px solid rgba(201, 180, 255, 0.32);
+  border-radius: 10px;
+  pointer-events: none;
+}
+
+/* ---------- 牌面第 3 层：文字 ----------
+   有卡框时：罗马数字落进上边带、牌名落进下边带（深色，压在米白卡框上）
+   无卡框时：文字压在插画上，改用亮色 + 投影保证可读               */
+
+.card__caption {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.card__face--framed {
+  display: block;
+  padding: 0;
+  border-color: transparent;
+  /* 卡框自带的圆角与右下吊牌已在素材里画好，这里不能再裁 */
+  border-radius: 0;
+  box-shadow: 0 0 50px rgba(124, 92, 214, 0.34);
+  /* 兜底底色必须是卡框纸色：卡框素材若在边缘留了透明外边距，
+     这里用暗色就会从卡片外缘漏出一圈「黑边」（2026-09-18 踩过）。 */
+  background-color: var(--card-paper, #dfd2ba);
+}
+
+/* 罗马数字：落在上框带的米白净空区（这里约 72px 净空，放得下） */
+.card__face--framed .card__num {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: var(--frame-top, 10%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 4;
+  font-size: 3.1cqh;
+  letter-spacing: 0.28em;
+  text-indent: 0.28em;
+  color: #8a682e;
+}
+
+/* 牌名：下框带被双层金线占满（净空只剩 13px / 25px），放不下，
+   所以落在插画窗口内下缘，并垫一层由透明渐深的暗色底衬保证任何画面上都读得清。
+   实测浅色插画（恋人 / 力量 / 太阳）上底衬要够重，文字还要加同色描边兜底。 */
+.card__face--framed .card__caption {
+  position: absolute;
+  left: var(--frame-left, 12%);
+  right: var(--frame-right, 12%);
+  bottom: var(--frame-bottom, 12%);
+  height: var(--scrim-height, 15%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 1.1cqh;
+  padding-bottom: 1.5cqh;
+  z-index: 4;
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    rgba(8, 5, 16, 0) 0%,
+    rgba(8, 5, 16, 0.45) 40%,
+    rgba(8, 5, 16, 0.88) 100%
+  );
+}
+
+.card__face--framed .card__name {
+  font-size: 3.7cqh;
+  letter-spacing: 0.22em;
+  text-indent: 0.22em;
+  color: #fcf8ee;
+  paint-order: stroke fill;
+  -webkit-text-stroke: 0.055em rgba(14, 9, 24, 0.92);
+  text-shadow: 0 1px 6px rgba(6, 4, 14, 0.75);
+}
+
+.card__face--framed .card__name-en {
+  font-size: 2.1cqh;
+  letter-spacing: 0.3em;
+  text-indent: 0.3em;
+  color: #eed69e;
+  paint-order: stroke fill;
+  -webkit-text-stroke: 0.045em rgba(14, 9, 24, 0.92);
+  text-shadow: 0 1px 5px rgba(6, 4, 14, 0.75);
+}
+
+.card__face--framed .card__glyph {
+  position: absolute;
+  left: var(--frame-left, 14%);
+  right: var(--frame-right, 14%);
+  top: var(--frame-top, 10%);
+  bottom: var(--frame-bottom, 10%);
+  margin: auto;
+  z-index: 2;
+}
+
+/* 卡框素材缺失时的降级排版：文字压在插画上 */
+.card__face--art:not(.card__face--framed) .card__num {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 12%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 4;
+  font-size: 4.3cqh;
+  letter-spacing: 0.28em;
+  text-indent: 0.28em;
+  color: var(--gold);
+  text-shadow: 0 0 12px rgba(8, 5, 15, 0.95), 0 0 4px rgba(8, 5, 15, 0.9);
+}
+
+.card__face--art:not(.card__face--framed) .card__caption {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 12%;
+  justify-content: center;
+  gap: 2px;
+  z-index: 4;
+}
+
+.card__face--art:not(.card__face--framed) .card__name {
+  font-size: 3.2cqh;
+  letter-spacing: 0.22em;
+  text-indent: 0.22em;
+  color: var(--text);
+  text-shadow: 0 0 14px rgba(8, 5, 15, 0.95), 0 0 4px rgba(8, 5, 15, 0.9);
+}
+
+.card__face--art:not(.card__face--framed) .card__name-en {
+  font-size: 2.3cqh;
+  letter-spacing: 0.3em;
+  text-indent: 0.3em;
+  text-shadow: 0 0 10px rgba(8, 5, 15, 0.95);
+}
+
+.card__num {
+  font-family: var(--font-display);
+  font-size: 15px;
+  letter-spacing: 0.3em;
+  color: var(--gold);
+}
+
+.card__name {
+  font-family: var(--font-display);
+  font-size: 30px;
+  letter-spacing: 0.24em;
+  margin: 0;
+  text-indent: 0.24em;
+  color: var(--text);
+}
+
+.card__name-en {
+  font-size: 11px;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin: 0;
+}
+
+.card__glyph {
+  width: 92px;
+  height: 92px;
+  border-radius: 50%;
+  margin-top: 6px;
+  background: radial-gradient(circle at 40% 34%, rgba(233, 224, 255, 0.85), rgba(124, 92, 214, 0.5) 42%, transparent 72%);
+  box-shadow: inset 0 0 24px rgba(201, 180, 255, 0.5);
+}
+
+/* ============================ 解读面板 ============================ */
+.panel {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 50;
+  background: linear-gradient(to top, rgba(8, 5, 15, 0.97) 42%, rgba(8, 5, 15, 0.82) 74%, transparent 100%);
+  padding: 22px clamp(20px, 6vw, 68px) 30px;
+  /* 顶边用渐变发丝线（两端透明、中间亮），呼应卡框的金线语言。
+     升级前是一条 1px 实线，在截图里读成一条横切画面的廉价细边。 */
+  border-top: 0;
+}
+
+/* 发丝线用伪元素，这样能做渐变（border 做不到两端透明） */
+.panel::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(201, 180, 255, 0.14) 18%,
+    rgba(201, 180, 255, 0.52) 50%,
+    rgba(201, 180, 255, 0.14) 82%,
+    transparent 100%
+  );
+  pointer-events: none;
+}
+
+/* backdrop-filter 只在允许动效时开，且降到 3px：
+   暗底上 3px 与 6px 肉眼无差别，但少一层全宽合成（面板占视口 33.6%）。
+   减少动效 / 低端路径下直接关掉。 */
+@media (prefers-reduced-motion: no-preference) {
+  .panel {
+    backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(3px);
+  }
+}
+
+.panel__inner {
+  max-width: 640px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.panel__kicker {
+  font-size: 11px;
+  letter-spacing: 0.34em;
+  color: var(--text-faint);
+  margin: 0 0 10px;
+}
+
+.panel__tags {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.panel__tag {
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  color: var(--glow);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 12px;
+}
+
+.panel__text {
+  font-size: 14px;
+  line-height: 1.9;
+  color: rgba(239, 233, 255, 0.86);
+  margin: 0 0 14px;
+  text-align: justify;
+  text-align-last: center;
+}
+
+.panel__advice {
+  font-family: var(--font-display);
+  font-size: 14px;
+  line-height: 1.8;
+  color: var(--gold);
+  margin: 0 0 20px;
+}
+
+.panel__actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.btn {
+  font-family: var(--font-body);
+  font-size: 12px;
+  letter-spacing: 0.2em;
+  color: var(--text-dim);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 9px 22px;
+  cursor: pointer;
+  transition: color 0.25s, border-color 0.25s, transform 0.25s;
+}
+
+.btn:hover {
+  color: var(--text);
+  border-color: rgba(201, 180, 255, 0.5);
+  transform: translateY(-1px);
+}
+
+.btn--primary {
+  color: var(--ink);
+  background: linear-gradient(120deg, var(--glow), var(--violet));
+  border-color: transparent;
+}
+
+/* ============================ 闪光 / 遮罩 ============================ */
+.flash {
+  position: absolute;
+  inset: 0;
+  z-index: 35;
+  pointer-events: none;
+  background: radial-gradient(circle at 50% 62%, rgba(255, 250, 255, 0.92) 0%, rgba(201, 180, 255, 0.42) 24%, transparent 60%);
+}
+
+/* ② 释放的冲击环（2026-09-19）：从球心荡开的一圈光，把「释放」的峰值做实。
+   纯 CSS，无素材；只动 transform / opacity / filter。
+   球心位置与 .flash 的渐变中心保持一致（50% / 62%）。 */
+.draw-burst {
+  position: absolute;
+  left: 50%;
+  top: 62%;
+  width: 52vmin;
+  height: 52vmin;
+  z-index: 36;
+  pointer-events: none;
+  border-radius: 50%;
+  border: 1px solid rgba(233, 224, 255, 0.7);
+  background: radial-gradient(circle, rgba(255, 252, 255, 0.3) 0%, transparent 62%);
+  /* 挂载即播（`phase === 'drawing'` 那一刻），700ms 走完停在透明 */
+  animation: drawBurst 700ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes drawBurst {
+  0% {
+    transform: translate(-50%, -50%) scale(0.4);
+    opacity: 0;
+  }
+  18% {
+    opacity: 0.95;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1.5);
+    opacity: 0;
+  }
+}
+
+.curtain {
+  position: absolute;
+  inset: 0;
+  z-index: 60;
+  background: var(--ink);
+  pointer-events: none;
+}
+
+/* 入场雾气：从中央光雾逐渐散开，露出场景 */
+.veil {
+  position: absolute;
+  inset: -12%;
+  z-index: 55;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse at 50% 58%,
+    rgba(139, 106, 226, 0.5) 0%,
+    rgba(43, 26, 82, 0.86) 34%,
+    rgba(8, 5, 15, 0.99) 68%
+  );
+}
+
+/* 定格后的常驻呼吸感（承接入场动画，视觉上无缝衔接）。
+   动画挂在 .hero-plate 上，它没有自己的定位 transform，所以不会打架。
+
+   2026-09-18 手感升级：24s 纯 scale → **14s，且叠加一点纵向位移**。
+   原来的问题：24 秒一个来回，观众在前 10 秒里几乎感知不到「它还活着」；
+   而且只有缩放没有位移，读起来像缓慢对焦，不像呼吸。
+   改成 14s 并加 ±0.6% 的纵向漂移后，静止画面才有「活着」的微动。
+   起始 scale 从 1.02 收到 1.0 —— 与入场动画的落点 1.0 直接接上，接缝不可见。 */
+.hero-plate--idle {
+  animation: bgBreath 14s ease-in-out infinite alternate;
+}
+
+@keyframes bgBreath {
+  from {
+    transform: translate3d(0, 0.6%, 0) scale(1);
+  }
+  to {
+    transform: translate3d(0, -0.6%, 0) scale(1.028);
+  }
+}
+
+/* ============================ 开发面板 ============================ */
+/* ⚠️ 竖排 + 定宽是**功能性**要求，不是审美选择（2026-09-19 第十六轮实测抓到的）。
+   原先它是横排的一条长胶囊（实测宽 765px —— 尾部还挂着「初始：unlimited · 正式版 daily ·
+   键名 tarot-daily::draw-record」），左对齐贴底；而解读面板的动作行（「再抽一次」/「生成分享卡片」）
+   也是贴底居中。实测 1564×1004 下「再抽一次」落在 x658..762 / y936..974，正好被调试条盖住：
+   `document.elementFromPoint(按钮中心)` 返回 `DIV.devbar` —— **鼠标根本点不到那一下**。
+   （程序化 `.click()` 照样能触发，所以只靠点击断言的自检全是绿的，发现不了。
+     这正是「可见 ≠ 可点」，判据要落在命中测试上。）
+   竖排后宽度收到 92px，两种视口下都不再与居中内容相交；
+   再加 `pointer-events: none`（只有按钮自己 `auto`）兜底，连边框背景都不会吃点击。 */
+.devbar {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  z-index: 70;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 5px;
+  width: 92px;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--text-faint);
+  background: rgba(8, 5, 15, 0.72);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 8px;
+  pointer-events: none;
+}
+
+/* 容器不吃点击，只有按钮吃 —— 这样即使视觉上有一点点交叠，也不会吞掉底下的按钮 */
+.devbar > * {
+  pointer-events: auto;
+}
+
+.devbar__cap {
+  opacity: 0.6;
+  text-align: center;
+  word-break: break-word;
+}
+
+.devbar button {
+  width: 100%;
+  font-size: 11px;
+  text-align: center;
+  color: var(--text-dim);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 3px 6px;
+  cursor: pointer;
+}
+
+.devbar button[data-active='true'] {
+  color: var(--ink);
+  background: var(--glow);
+  border-color: transparent;
+}
+
+/* ============================ 牌面总览 ============================ */
+.card__face--flat {
+  transform: none;
+}
+
+.gallery {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: rgba(6, 4, 12, 0.97);
+  display: flex;
+  flex-direction: column;
+  padding: 18px clamp(14px, 4vw, 40px) 22px;
+  overflow: hidden;
+}
+
+.gallery__bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.gallery__bar strong {
+  font-family: var(--font-display);
+  font-size: 15px;
+  letter-spacing: 0.2em;
+  color: var(--text);
+  font-weight: 400;
+}
+
+.gallery__hint {
+  flex: 1;
+  color: var(--text-faint);
+}
+
+.gallery__bar button {
+  font-size: 11px;
+  color: var(--text-dim);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 14px;
+  cursor: pointer;
+}
+
+.gallery__grid {
+  flex: 1;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(126px, 1fr));
+  gap: 18px 14px;
+  padding: 18px 2px;
+}
+
+.gallery__item {
+  margin: 0;
+}
+
+.gallery__card {
+  position: relative;
+  aspect-ratio: var(--card-aspect, 3 / 5);
+  border-radius: 0;
+  overflow: hidden;
+}
+
+.gallery__meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--text-faint);
+}
+
+.gallery__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(201, 180, 255, 0.25);
+}
+
+.gallery__dot--on {
+  background: #e8c778;
+  box-shadow: 0 0 8px rgba(232, 199, 120, 0.8);
+}
+
+.gallery__foot {
+  margin: 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+@media (max-width: 640px) {
+  /* 标题带已改为「从卡牌顶边往上锚定」（见 .headline 注释），
+     竖屏不再需要单独覆盖 top —— 那会让它重新从顶部往下排、撞上卡牌。
+     这里只收紧字号与间距，好塞进顶栏与卡牌之间的窄带。 */
+  .headline__title {
+    font-size: clamp(22px, 6.4vw, 30px);
+    margin-bottom: 6px;
+  }
+  .headline__sub {
+    font-size: 11px;
+    letter-spacing: 0.2em;
+  }
+  .panel {
+    padding-bottom: 24px;
+  }
+  .panel__text {
+    font-size: 13px;
+  }
+}
+
+/* ⚠️ 矮视口必须收紧面板的纵向留白（2026-09-19 由实测倒推，改面板前先读）─────
+   面板是「bottom 锚定 + 内容撑高」，而卡牌底边固定在 `ANCHORS.stage.y + 卡高/2`
+   = 视口高的 61.5%。于是面板**能用的高度只有 38.5%**（77 − 38.5）。
+   实测文案最长的两张牌（魔术师 / 恶魔，meaning + advice 各 98 字）：
+
+     视口            面板高        占视口   结果
+     1564×708（桌面） 269.4px      38.1%    仅剩 **3.2px** 净空 —— 不是「没撞」，是「侥幸」
+      504×688（竖屏） 284.3px      41.3%    **超出 19.3px，压在卡牌下框带上**
+
+   竖屏截图里能直接看到卡牌底部的金饰被面板的渐变顶边压暗。面板顶边虽然接近全透明
+   （`transparent 100%` 那一段），但压在卡框上就是能看出来的瑕疵。
+
+   为什么**不**用「给面板限高 + 内部滚动」：面板底部的「生成分享卡片」是主 CTA，
+   一旦限高滚动，它会被挤出可视区 —— 比压住 20px 渐变严重得多。
+
+   所以改成在矮视口收紧留白，让内容自然装得下。**实测（收紧后复测）**：
+
+     视口            面板高        占视口   净空（面板顶边 − 卡牌底边）
+     1564×708（桌面） 233.4px      33.0%    +39.2px
+      504×688（竖屏） 254.3px      37.0%    **+10.7px**（文案最长的一张，原为 −19.3px）
+      504×688（竖屏） 233.6px      34.0%    +31.3px（文案最短的「世界」）
+
+   ⚠️ 竖屏那 10.7px 是**留下限**，不是宽裕值：允许的上限是视口的 38.5%。
+      若以后加长牌面文案，务必重跑 `scripts/flows/audit-draw.js` 看 `clearancePx`
+      （它会把净空一起打出来），别只看 overlapPx 是不是 0。
+
+   ⚠️ 阈值取 780px：危险区从约 710px 开始（可用高度 = 38.5% × 视口高），
+      留到 780 是为了给字体度量差异留余量。高视口（大屏显示器）保持原有舒展间距。 */
+@media (max-height: 780px) {
+  .panel {
+    padding-top: 14px;
+    padding-bottom: 20px;
+  }
+  .panel__kicker {
+    margin-bottom: 6px;
+  }
+  .panel__tags {
+    margin-bottom: 10px;
+  }
+  .panel__text {
+    margin-bottom: 10px;
+  }
+  .panel__advice {
+    margin-bottom: 14px;
+  }
+}
+
+/* ============================ 分享卡片弹窗 ============================ */
+.share {
+  position: fixed;
+  inset: 0;
+  z-index: 95;
+  background: rgba(6, 4, 12, 0.86);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(12px, 4vw, 36px);
+}
+
+.share__dialog {
+  display: flex;
+  flex-direction: column;
+  max-height: 100%;
+  width: min(460px, 100%);
+  background: rgba(12, 8, 24, 0.96);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  overflow: hidden;
+}
+
+.share__bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.share__bar strong {
+  font-family: var(--font-display);
+  font-size: 14px;
+  letter-spacing: 0.18em;
+  font-weight: 400;
+  color: var(--text);
+}
+
+.share__hint {
+  flex: 1;
+  color: var(--text-faint);
+  letter-spacing: 0.1em;
+}
+
+.share__bar button {
+  font-size: 11px;
+  color: var(--text-dim);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 14px;
+  cursor: pointer;
+}
+
+.share__preview {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+}
+
+.share__preview img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 10px;
+  box-shadow: 0 12px 44px rgba(8, 5, 15, 0.7);
+}
+
+.share__state {
+  font-size: 13px;
+  line-height: 1.9;
+  color: var(--text-dim);
+  text-align: center;
+  margin: 32px 0;
+}
+
+.share__state--error {
+  color: #ffb4b4;
+}
+
+.share__actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  justify-content: center;
+  padding: 16px 18px 20px;
+  border-top: 1px solid var(--line);
+}
+
+.share__actions .btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+  transform: none;
+}
+
+.share__tip {
+  font-size: 11px;
+  color: var(--text-faint);
+  letter-spacing: 0.08em;
+}
+
+/* ==========================================================
+   迎接动画 · 信封（对应 src/components/EnvelopeWelcome.jsx）
+   ----------------------------------------------------------
+   构图是**极近距离的大特写**：信封大到四边全部溢出视口，整封带一个
+   斜角 + 一点 3D 前倾，镜头几乎贴在信封开口上 —— 画面里看到的是
+   上翻盖那块大三角、内腔，以及坐在三角尖端的火漆封印。
+   （第一版是一只完整的小信封浮在画面正中，被用户否掉了：「那种算是
+     很传统的小信封打开，我要的是涵盖整个网页大小的、倾斜角度、
+     很近聚焦在信封开口的那种」—— 所以这一版要的是扑面而来的压迫感。）
+
+   信封沿用站点的「纸 + 金箔」语言：米白厚卡纸（与卡框同一族纸色）
+   + 金色发丝边 + 深紫火漆封印（八芒星母题，与牌背一致）。
+
+   分层职责（每层只干一件事，改的时候别混）：
+     .welcome__stage  铺满视口 + 提供**相机透视**
+     .env-cam         相机角度（斜角 / 前倾）、整封大小与纵向位置
+     .env-in          入场淡入 / 缩放落定
+     .env             退场淡出 / 朝镜头推近
+     .env__*          信封自身的零件
+
+   几何：整封宽高比 1.46；上翻盖是一个顶边贴齐信封顶边、尖端落在
+   58% 高度的三角形；另外三片折页（左/右/下）共用这个 58% 的汇聚点，
+   四片正好铺满整个矩形，折痕才是连贯的。
+   放大到溢屏之后，画面上真正看到的就是这块三角形 + 火漆封印。
+
+   ⚠️ 三条必须记住的坑（改这里之前先看一遍）：
+
+   ① **`perspective` 只作用于直接子元素。** 相机的透视挂在
+      `.welcome__stage` 上，`.env-cam` 就必须是它的直接子元素，
+      中间不能夹别的层；同理翻盖的透视挂在 `.env__flap-slot` 上，
+      `.env__flap` 是它的直接子元素。挂错层级 = 完全不生效。
+   ② `opacity` / `filter` / `clip-path` 都是 **grouping property**，
+      会把所在元素的子树压平成 2D。所以**不要**把它们挂到
+      `.env-cam` / `.env__flap-slot` 上，否则 3D 会被抹掉。
+   ③ 居中的位移一律用独立的 `translate` 属性而不是 `transform` ——
+      transform 要留给相机角度，写在一起会互相覆盖。
+
+   相机参数只有 4 个（都在 `.env-cam` 上），调构图改这几个就够：
+     --env-rot      平面内斜角（信封歪多少）
+     --env-tilt     3D 前倾（开口朝镜头多少）
+     --env-shift-y  纵向位置（决定封印落在画面哪个高度）
+     width          整封大小（决定溢屏多少）
+   ========================================================== */
+.welcome {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+/* 暗场：必须完全不透光，否则背后的场景会透上来把信弄脏 */
+.welcome__veil {
+  position: absolute;
+  inset: -10%;
+  background-color: #08050f;
+  background-image: radial-gradient(
+    ellipse at 50% 52%,
+    rgba(58, 36, 104, 0.96) 0%,
+    rgba(20, 11, 40, 0.99) 46%,
+    rgba(8, 5, 15, 1) 78%
+  );
+}
+
+/* 舞台铺满视口，负责提供相机透视。
+   透视挂在这一层是必须的 —— 它只作用于直接子元素 .env-cam */
+.welcome__stage {
+  position: absolute;
+  inset: 0;
+  perspective: max(170vw, 232vh);
+  perspective-origin: 50% 40%;
+}
+
+/* 相机：一整封的斜角 + 前倾 + 大小 + 纵向位置。
+   `top: calc(50% + shift)` 配 `translate: -50% -50%` 把信封中心摆在
+   视口中心（再按 shift 微调），宽高比 1.46 由 aspect-ratio 撑出来。 */
+.env-cam {
+  --env-rot: -15deg; /* 平面内斜角：信封不是正着摆的 */
+  --env-tilt: -9deg; /* 3D 前倾：开口朝镜头一点，才看得进内腔 */
+  --env-shift-y: 7vh; /* 纵向微调：决定三角尖端与封印落在画面哪个高度 */
+  position: absolute;
+  left: 50%;
+  top: calc(50% + var(--env-shift-y));
+  width: max(136vw, 186vh);
+  aspect-ratio: 1.46;
+  translate: -50% -50%;
+  transform: rotateZ(var(--env-rot)) rotateX(var(--env-tilt));
+}
+
+.env-in {
+  will-change: transform, opacity;
+}
+
+.env {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1.46;
+  --paper-1: #f2e8d4;
+  --paper-2: #e5d9bf;
+  --paper-3: #d6c7a7;
+  --foil: #e8c98a;
+  --foil-deep: #b08c46;
+}
+
+/* 信封本体。
+   大特写下「纸」几乎铺满整个画面，所以纸的明度关系必须一开始就定好：
+   **上翻盖（受光面）比本体亮、比本体暖**，本体压暗一档，
+   两者一叠才有「一片纸盖在另一片纸上」的层次。
+   第一版两者用同一族纸色、明度几乎一样，合上时整屏是一块糊在一起的奶油色。 */
+.env__body {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: linear-gradient(160deg, #e9dcc2 0%, #dbcdb0 48%, #c9b998 100%);
+  box-shadow: inset 0 -34px 60px rgba(128, 103, 66, 0.2);
+}
+
+/* 纸纹：极淡的颗粒。没有它整封信会像一块纯色矢量色块 */
+.env__body::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: radial-gradient(rgba(126, 100, 62, 0.11) 1px, transparent 1px);
+  background-size: 3px 3px;
+}
+
+/* 三片折页：与上翻盖共用 58% 的汇聚点，四片正好铺满矩形 */
+.env__panel {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.env__panel--l {
+  clip-path: polygon(0 0, 0 100%, 50% 58%);
+  background: linear-gradient(100deg, rgba(132, 108, 70, 0.38) 0%, rgba(132, 108, 70, 0.1) 54%, rgba(132, 108, 70, 0) 100%);
+}
+
+.env__panel--r {
+  clip-path: polygon(100% 0, 100% 100%, 50% 58%);
+  background: linear-gradient(260deg, rgba(132, 108, 70, 0.38) 0%, rgba(132, 108, 70, 0.1) 54%, rgba(132, 108, 70, 0) 100%);
+}
+
+.env__panel--b {
+  clip-path: polygon(0 100%, 50% 58%, 100% 100%);
+  background: linear-gradient(0deg, rgba(118, 94, 60, 0.4) 0%, rgba(118, 94, 60, 0.12) 48%, rgba(118, 94, 60, 0) 100%);
+}
+
+/* 折痕：斜向发丝线用 SVG 画（CSS 渐变做斜线既麻烦又不准）。
+   大特写下这几条线落在画面下缘，正好把「这是信封的折页」交代清楚 */
+.env__seams {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+/* 信封内腔。大特写里它是画面的主角，**必须是暗的** ——
+   内部的暗与外圈纸的亮形成反差，才算「一个开口」。
+   渐变方向：靠近封口那侧受光、越往尖端（信封最深处）越黑。
+   形状与上翻盖完全一致（同一块三角形），所以盖着的时候被翻盖**完整遮住**，
+   翻盖一转开就自己露出来 —— 不需要任何额外的显隐动画。 */
+.env__cavity {
+  position: absolute;
+  inset: 0;
+  clip-path: polygon(0 0, 100% 0, 50% 58%);
+  background: linear-gradient(180deg, #6a5436 0%, #33271a 40%, #120c06 100%);
+  box-shadow:
+    inset 0 24px 40px rgba(255, 226, 176, 0.16),
+    inset 0 -26px 52px rgba(0, 0, 0, 0.62);
+}
+
+/* 内腔两条斜边的受光纸口：把「开口」的边缘勾出来，纵深才立得住。
+   不要给它加大范围 blur —— 这层铺满整封，blur 的代价是全屏级的，
+   而 2px 的模糊肉眼根本看不出来。 */
+.env__cavity-edge {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+/* 打进内腔的光：椭圆压在内腔靠封口那一侧，往尖端迅速衰减。
+   被 clip-path 裁成与内腔同形，光不会溢到信封外面去。
+   这一层要**集中**：摊开了内腔就整体发白，暗部的反差没了（踩过）。 */
+.env__cavity-glow {
+  position: absolute;
+  inset: 0;
+  clip-path: polygon(0 0, 100% 0, 50% 58%);
+  background: radial-gradient(
+    ellipse 78% 40% at 50% 0%,
+    rgba(255, 240, 206, 0.82) 0%,
+    rgba(255, 202, 132, 0.34) 38%,
+    rgba(120, 82, 40, 0) 76%
+  );
+  pointer-events: none;
+}
+
+/* 金箔角星：呼应卡框的角饰与牌背的八芒星，只是简化成四芒星。
+   位置按**大特写的可见区域**重新摆过 —— 原来的「卡片底角」现在在画面外，
+   所以改到三角尖端下方、左右下折页里 */
+.env__corner {
+  position: absolute;
+  width: 3.4%;
+  height: auto;
+  top: 64%;
+  pointer-events: none;
+  filter: drop-shadow(0 0 6px rgba(232, 201, 138, 0.35));
+}
+
+.env__corner--l {
+  left: 26%;
+}
+
+.env__corner--r {
+  right: 26%;
+}
+
+/* 月相压印：坐在三角尖端正下方的中间折页里 */
+.env__moon {
+  position: absolute;
+  left: 50%;
+  top: 66%;
+  width: 5.4%;
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  pointer-events: none;
+  filter: drop-shadow(0 0 8px rgba(232, 201, 138, 0.3));
+}
+
+/* 上翻盖：绕信封顶边 rotateX 翻起来。
+   ------------------------------------------------
+   角度取 -142°（不是 -180°）是有意的：
+   rotateX(θ) 把元素纵坐标映射成 y·cosθ，所以 θ 越接近 180°，
+   翻开后的投影高度越接近闭合时的原尺寸 —— 结果就是一块和原来一样大的
+   平板顶在信封上，看着像「屋顶」，很假。
+   -142° 时投影高度只剩 79%，末端还会往后退（z ≈ -0.64·h），
+   配合透视再缩一档，才有「盖子立起来、往后倒」的立体感。 */
+.env__flap-slot {
+  position: absolute;
+  inset: 0;
+  /* 透视值必须**跟着信封尺寸走**：写死 900px 在放大到溢屏后
+     会把翻盖拉成畸变的喇叭形。这里按视口给，和信封尺寸同量级 */
+  perspective: max(170vw, 232vh);
+  pointer-events: none;
+}
+
+.env__flap {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 58%;
+  transform-origin: 50% 0%;
+  will-change: transform;
+}
+
+.env__flap-shadow {
+  position: absolute;
+  inset: 0;
+  filter: drop-shadow(0 14px 34px rgba(58, 38, 16, 0.45));
+}
+
+.env__flap-face {
+  position: absolute;
+  inset: 0;
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+  /* 外层是金箔，内层缩进去一点露出金边 —— 与卡框的金线同一套语言。
+     大特写下 1.6px 细到看不见，所以加粗到 6px（比例上仍是一根发丝） */
+  background: linear-gradient(176deg, #edd39c 0%, #c9a463 100%);
+}
+
+.env__flap-face-in {
+  position: absolute;
+  inset: 7px;
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+  background: linear-gradient(176deg, #fdf7ea 0%, #f4ebd7 52%, #e5d9bd 100%);
+}
+
+/* 盖面上的内嵌金线 */
+.env__flap-inlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+/* 翻到背面后的受光变化。
+   渐变方向注意：元素自身坐标里 y=0 是折边（铰链）、y=100% 是盖子尖端；
+   翻起来之后**尖端跑到上面**去了，而尖端是转得最远、最背光的一端，
+   所以要 `0deg`（0% 落在元素底部=尖端）才能让尖端更暗。写反就变成折边发暗，很怪。 */
+.env__flap-shade {
+  position: absolute;
+  inset: 0;
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+  background: linear-gradient(0deg, rgba(58, 40, 18, 0.6) 0%, rgba(58, 40, 18, 0.22) 62%, rgba(58, 40, 18, 0.06) 100%);
+}
+
+/* 开口涌出的暖光。
+   第一版这里是「信封背后的光晕 + 向上的光柱」，但两者都依赖
+   「信封完整地摆在画面里」：现在信封四边都溢出视口，光晕被完全遮住、
+   光柱直接冲到画面外，所以整块换掉。
+
+   三条踩出来的经验：
+   ① 中心压在**内腔靠上那一段**（30% 高度），不是画面正中 —— 光是从开口
+      往下漫出来的，压在正中就变成一团没有来源的光。
+   ② **不要用 `mix-blend-mode: screen`**。纸本来就是亮的，screen 只会把它
+      整体提白，画面直接失去对比（实测开口那一帧整屏糊成灰紫）。
+      用普通的 alpha 叠加，只在开口附近提亮，画面四角的暖调才保得住。
+   ③ 半径要收到画面四角之外就衰减干净，否则边角也跟着发灰。
+   另外这里不加大范围 blur：这层铺得很开，blur 的代价是全屏级的，
+   渐变本来已经够柔，多给几个色标就不banding。 */
+.env__bloom {
+  position: absolute;
+  left: 50%;
+  top: 30%;
+  width: 96%;
+  height: 78%;
+  translate: -50% -50%;
+  border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(
+    circle,
+    rgba(255, 246, 226, 0.76) 0%,
+    rgba(255, 231, 190, 0.56) 14%,
+    rgba(255, 212, 166, 0.36) 30%,
+    rgba(244, 190, 234, 0.18) 48%,
+    rgba(188, 148, 248, 0.07) 62%,
+    rgba(160, 120, 240, 0) 76%
+  );
+}
+
+/* 星屑 */
+.env__speck {
+  position: absolute;
+  top: 56%;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(240, 228, 255, 1) 0%, rgba(170, 140, 245, 0.6) 52%, rgba(160, 130, 240, 0) 100%);
+  box-shadow:
+    0 0 12px rgba(190, 160, 255, 0.9),
+    0 0 24px rgba(150, 115, 240, 0.55);
+  pointer-events: none;
+}
+
+.env__speck--gold {
+  background: radial-gradient(circle, #fff6de 0%, rgba(232, 201, 138, 0.65) 52%, rgba(232, 201, 138, 0) 100%);
+  box-shadow:
+    0 0 12px rgba(238, 212, 154, 0.9),
+    0 0 26px rgba(226, 190, 118, 0.55);
+}
+
+/* 火漆封印：坐在上翻盖的尖端上，也就是大特写里画面的焦点。
+   尺寸按**视口**给而不是按信封百分比 —— 信封已经放大到溢屏，
+   按百分比算出来会是一块盘子那么大的蜡，太抢戏。 */
+.env__seal-slot {
+  position: absolute;
+  left: 50%;
+  top: 56.5%;
+  width: min(20vw, 24vh);
+  aspect-ratio: 1;
+  translate: -50% -50%;
+}
+
+.env__seal {
+  position: absolute;
+  inset: 0;
+  filter: drop-shadow(0 8px 20px rgba(8, 4, 18, 0.66));
+}
+
+.env__seal-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* 交卸闪光：把信封的光与场景的雾缝起来，避免硬切 */
+.welcome__burst {
+  position: absolute;
+  inset: -20%;
+  pointer-events: none;
+  background: radial-gradient(
+    circle at 50% 52%,
+    rgba(255, 250, 240, 0.9) 0%,
+    rgba(201, 180, 255, 0.45) 26%,
+    rgba(124, 92, 214, 0) 62%
+  );
+}
+
+.welcome__hint {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 6%;
+  text-align: center;
+  font-size: 11px;
+  letter-spacing: 0.34em;
+  text-indent: 0.34em;
+  color: rgba(239, 233, 255, 0.58);
+  pointer-events: none;
+}
+
+/* 竖屏：视口又窄又长，按 136vw 算只有几百像素，撑不住「四边溢出」，
+   所以要**同时**按高度放大，并把整封往上推一点，
+   否则左上角会露出暗场（实测过，很显眼）。
+   竖屏要覆盖 504×784 且旋转 13°，信封高度至少得 ~1100px，
+   换算成宽度约 200vh —— 所以下面这一组值不能再往小调。 */
+@media (max-width: 640px) {
+  .env-cam {
+    width: max(200vw, 200vh);
+    --env-rot: -13deg;
+    --env-shift-y: 3vh;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mist__band,
+  .orb__swirl,
+  .orb__nebula,
+  .orb__glow,
+  .orb__ring,
+  .orb__art,
+  .orb__label,
+  .hero-plate--idle,
+  .orb.orb--released,
+  /* 2026-09-19 抽牌仪式新增的 CSS 动画，一并停掉 */
+  .orb.orb--charging,
+  .orb.orb--charging .orb__charge,
+  .card__halo-core,
+  .draw-burst {
+    animation: none !important;
+  }
+  /* 减少动效：缩放反馈也让位，只保留焦点环（无障碍不能去掉） */
+  .orb,
+  .orb:not(:disabled):hover,
+  .orb:not(:disabled):active {
+    transform: translate(-50%, -50%) scale(1) !important;
+    transition: none !important;
+  }
+  /* 冲击环停了动画就会停在「不透明」的静态画面上，所以直接不显示 */
+  .draw-burst {
+    display: none !important;
+  }
+  .scene__charge-dim {
+    opacity: 0 !important;
+    transition: none !important;
+  }
+  /* 压暗层与雾的浓度变化也是「加长的仪式感」的一部分，reduced 下一律不动 */
+  .mist--intense {
+    opacity: var(--mist-alpha) !important;
+    filter: none !important;
+  }
+}
+

@@ -1,0 +1,24 @@
+# ============================================================
+#  git 属性（2026-09-19）
+#  目的：让入库字节与磁盘字节**完全一致**，杜绝 git 换行转换改坏文件。
+#  配套：本仓库 core.autocrlf=false（不许改成 true）。
+# ============================================================
+
+# .cmd / .bat 必须是 GBK 编码 + CRLF 换行 —— 换行一旦被转成 LF，
+# 双击就会报一堆「不是内部或外部命令」，而退出码仍然是 0（极难察觉）。
+# -text 关掉一切换行转换；-diff 表示别按文本做行差异。
+*.cmd -text -diff
+*.bat -text -diff
+
+# 素材一律按二进制处理（别做 diff、别做 EOL 归一）
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.webp binary
+*.gif  binary
+*.tif  binary
+*.tiff binary
+*.psd  binary
+*.zip  binary
+*.woff binary
+*.woff2 binary
