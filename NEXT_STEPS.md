@@ -624,9 +624,30 @@ PY="C:/Users/29923/.workbuddy/binaries/python/envs/default/Scripts/python.exe"
      样本喂给它。这个反向测试当场抓出了脚本自己的一个真 bug：
      Windows 上清单行尾的 `\r` 会被拼进路径，导致**连正常的文件也被报成缺失**
 
----
+32. **⚠️ 构图规格必须拿「可见窗口」核对，不能只看画布坐标**（2026-09-19，代价 = 1 张出图）
+   - **现象**：v2 主视觉按规格把「手」画在画布 y 61%–88%（依据是球的下缘与卡牌底线），
+     单看画布没有错；但宽扁屏的可见窗口下缘**只到 y≈75.7%**（1564×708 实测 y[10.4%, 75.7%]）
+     → 桌面上**手完全在可见窗口之外**。手机（可见窗口 y 到 97.3%）里手却完整可见。
+   - **判据**：`.hero-frame` 的 `width = max(104vw, 104vh×1.5)` 决定可见窗口是**尺度无关**的，
+     只要两种极端：宽扁屏裁上下（最窄 y[10%, 76%]）、窄高屏裁左右（最窄 x[35%, 65%]）。
+     所以「必须被看见的东西」要落进 **x ∈ [35%, 65%] × y ∈ [12%, 72%]** 这个中央安全盒。
+     **下面那条线是 y≈76%，不是 100%。**
+   - 现成工具：`assets/_debug/preview_hero_v2.py` 直接打印每种视口的可见窗口百分比，
+     并复用 `scripts/preview_hero.py` 的 CSS 数学合成 —— 别自己另算一份。
+   - 同源陷阱：**想验证「某物是否可见」时不要只截一张图肉眼看**。这张图暗场占比极高，
+     手在暗部里肉眼看不出来，必须「裁剪 + 自动对比拉伸」才能判定它到底在不在可见区
+     （`crop_hero_v2.py` + `ImageOps.autocontrast`）。
 
-## 7 · 成本红线
+33. **⚠️ 本机沙箱会静默丢弃 git 的远端跟踪引用；TLS 报错是偶发的**（2026-09-19）
+   - `gh repo create --private --source=. --push` **成功**（`gh api` 独立核实：远端 `main` = 本地 HEAD，
+     111 个 blob，仓为 private），但本地 `git branch -vv` 一直显示 `[origin/main: gone]`。
+   - 根因：`git fetch origin` 会打印 `* [new branch] main -> origin/main`，
+     但 `git show-ref` 里 **`refs/remotes` 一条都没有** —— 引用写入被沙箱丢掉了。
+     这不影响推送，只是本地看不到 ahead/behind。**要读远端状态就用 `git ls-remote`（可用）或 `gh api`。**
+   - 另一条：`git ls-remote` 曾报 `未能为 SSL/TLS 安全通道建立信任关系 / 远程证书无效`
+     （本机 `http.sslBackend = schannel`）。**这是偶发，重试即通**，不要据此改 SSL 配置。
+   - 结论：**验证推送有没有成功，要用 `gh api repos/<owner>/<repo>/commits/main`，
+     不能看 `git branch -vv`，也不能只看推送命令的退出码。**
 
 ---
 

@@ -258,6 +258,8 @@ leave no watermark trace anywhere in the new image.
 
 顺序：本地提交干净 → `gh repo create --private` → `git push` → 用户在 Vercel 侧 import。
 
+**已完成（2026-09-19）**：仓为 `https://github.com/VickRolL/tarot-daily`（private），首次推送 `2edb30f`，111 个文件 / 73 MB。`gh` 本机已登录，**建仓与推送都不需要用户操作**；待办只剩 Vercel 侧 import。
+
 ⚠️ 推之前必须复核 `.gitignore`：`assets/card-art`（22 张牌面母版）、`assets/hero-art`（主视觉母版）
 是**要入库的**（重出要花积分），而 `node_modules` / `dist*` / `assets/_debug` / `assets/previews` /
 `assets/card-styles` / `_archive` 必须排除。基线提交实测为 118 文件 / 70.92 MB。
