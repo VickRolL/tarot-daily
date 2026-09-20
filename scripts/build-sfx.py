@@ -56,19 +56,26 @@ except ImportError:
 # ---------------------------------------------------------------- 合同
 # 与 audio-src/README.md 的四音合同保持一致。
 #   target   成品目标时长（秒）：比 site 里实际用的略长或相等，超了截断
-#   hpf      高通转折频率（Hz）；None 不滤。charge 的 102Hz 泥需要 180
+#   hpf      高通转折频率（Hz）；None 不滤。charge 的 102Hz 泥需要 240
 #   passes   一阶 HPF 级联次数（2 = 12dB/oct）
 #   rms      归一目标（dBFS）
 #   fade_out 末尾淡出（秒）：截断处 / 自然结尾都用它防「咔」
+#   rescue   **是否强制「救泥判据」**。只有 charge 需要（原始素材质心 97Hz、
+#            低频占比 0.94，是真的泥）。burst/flip/reveal 本来就是亮音，
+#            硬套同一道门槛会**假失败** —— 「只在特定素材上成立的门槛，
+#            不能无差别套到所有素材」，这个坑在塔罗项目里已经踩过一次。
 #   trim     播放增益补偿（写进 sfx.js 的 TRIM，报告里带出去人工核对）
 SPECS = {
     # 参数是扫出来的（180~360Hz × 2~3 级联，见 2026-09-20 会话记录）：
     # 240Hz×2 是「质心 623Hz / 低频占比 0.57」与「别滤成薄片」的平衡点；
     # passes=3 时峰值系数恶化到 ~20dB，同样响度下动态被压得没法听。
-    'charge': {'target': 1.0, 'hpf': 240, 'passes': 2, 'rms': -14.0, 'fade_out': 0.08, 'trim': 1.4},
-    'burst':  {'target': 1.5, 'hpf': 90,  'passes': 2, 'rms': -13.0, 'fade_out': 0.12, 'trim': 1.0},
-    'flip':   {'target': 1.5, 'hpf': 120, 'passes': 2, 'rms': -14.0, 'fade_out': 0.10, 'trim': 1.0},
-    'reveal': {'target': 5.0, 'hpf': 60,  'passes': 1, 'rms': -14.0, 'fade_out': 0.50, 'trim': 1.0},
+    'charge': {'target': 1.0, 'hpf': 240, 'passes': 2, 'rms': -14.0, 'fade_out': 0.08, 'trim': 1.4, 'rescue': True},
+    'burst':  {'target': 1.5, 'hpf': 90,  'passes': 2, 'rms': -13.0, 'fade_out': 0.12, 'trim': 1.0, 'rescue': False},
+    'flip':   {'target': 1.5, 'hpf': 120, 'passes': 2, 'rms': -14.0, 'fade_out': 0.10, 'trim': 1.0, 'rescue': False},
+    # ⚠️ 合同写的是 5 秒，实际生成的是 **4 秒** —— 账户余额只够 4 秒（20 点/秒）。
+    #    差的那 1 秒在这条音里是「余韵尾巴」，4 秒的落点依然成立；
+    #    等以后有点数可以重生成 5s 覆盖，脚本无需改。
+    'reveal': {'target': 4.0, 'hpf': 60,  'passes': 1, 'rms': -14.0, 'fade_out': 0.50, 'trim': 1.0, 'rescue': False},
 }
 
 RAW_DIR = os.path.join('audio-src', 'sfx', '_raw')
@@ -202,8 +209,15 @@ def build_one(name, spec, kbps):
     out_centroid, out_low = spectral_metrics(a)
     out_dur = len(a) / SR
 
-    # 「救泥」判据：滤波后质心必须上移 ≥ 1.5 倍，且低频占比明显回落。
-    rescued = spec['hpf'] is None or (out_centroid > raw_centroid * 1.5 and out_low < 0.6)
+    # 「救泥」判据按素材分组（见 SPECS.rescue 的说明）：
+    #   rescue=True  原始是泥 → 必须**真的被救上来**（质心 ≥1.5 倍 且 低频占比 <0.6）
+    #   rescue=False 原始本来就亮 → 只要求滤波别把它弄暗（质心不低于 0.9 倍）
+    if spec['hpf'] is None:
+        rescued = True
+    elif spec['rescue']:
+        rescued = out_centroid > raw_centroid * 1.5 and out_low < 0.6
+    else:
+        rescued = out_centroid >= raw_centroid * 0.9
 
     return {
         'name': name,

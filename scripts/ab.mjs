@@ -194,7 +194,17 @@ function toSelector(sel) {
   return m ? `[data-ab-idx="${m[1]}"]` : sel
 }
 
-/** 滚进视口并等两帧，返回中心点坐标 */
+/** 滚进视口并等两帧，返回中心点坐标
+ *
+ * ⚠️ **必须给 rAF 加超时兜底**（2026-09-20 踩到，症状极难猜）：
+ *    窗口处于**后台/最小化**时 `requestAnimationFrame` **根本不触发** ——
+ *    于是 `await Promise.race([...])` 里的等待永不 resolve，
+ *    `awaitPromise: true` 的 Runtime.evaluate 就永远挂着，
+ *    表现是 click / type 这类命令**静默卡死**（外部看就是 SIGTERM 被杀），
+ *    而 text / snap / eval 全都正常（它们不碰 rAF）——
+ *    很容易误判成「元素找不到」或「站点拦了点击」。
+ *    超时用 1200ms：后台标签的 setTimeout 会被节流到 ~1s 粒度，要留出余量。
+ */
 async function centerOf(cdp, selector) {
   return await evalIn(
     cdp,
@@ -202,7 +212,10 @@ async function centerOf(cdp, selector) {
     const el = document.querySelector(${js(selector)});
     if (!el) return null;
     el.scrollIntoView({ block: 'center', inline: 'center' });
-    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    await Promise.race([
+      new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))),
+      new Promise((r) => setTimeout(r, 1200))
+    ]);
     const b = el.getBoundingClientRect();
     return { x: b.x + b.width / 2, y: b.y + b.height / 2, w: b.width, h: b.height, top: b.top };
   `
@@ -624,7 +637,20 @@ async function cmdEval() {
   if (f) src = readFileSync(resolve(f), 'utf8')
   if (!src) throw new Error('用法：eval <js>  或  eval --file <path>')
   await withPage(async (cdp) => {
-    const v = await evalIn(cdp, src)
+    /* ⚠️ evalIn 会把源码包进 `(async () => { … })()`，所以**没写 return 的纯表达式**
+       会静默返回 undefined（`eval "1+1"` 也是 undefined —— 这个坑很坑人：
+       看起来像「页面上找不到东西」，其实是「值没交回来」）。
+       所以这里先按「表达式」调一次：能过就天然把值带回来；
+       真遇到多语句脚本（作为表达式是 SyntaxError）再退回原样执行。
+       ⚠️ 反过来也要小心：**运行期异常不能被当成语法问题吞掉**，所以只在
+       SyntaxError 时回退，其它异常原样抛。 */
+    let v
+    try {
+      v = await evalIn(cdp, `return (${src});`)
+    } catch (e) {
+      if (!/SyntaxError/.test(String(e.message))) throw e
+      v = await evalIn(cdp, src)
+    }
     console.log('--eval 返回：', JSON.stringify(v))
   }, Number(flag('target', 0)))
 }

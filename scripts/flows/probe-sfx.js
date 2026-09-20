@@ -103,7 +103,7 @@ if (Orig) {
   Wrapped.prototype = Orig.prototype
   window.AudioContext = Wrapped
 }
-const count = { osc: 0, buf: 0, gain: 0, filter: 0, started: 0 }
+const count = { osc: 0, buf: 0, gain: 0, filter: 0, started: 0, bufStarted: 0 }
 if (Orig) {
   const p = Orig.prototype
   const wrap = (name, key) => {
@@ -116,6 +116,16 @@ if (Orig) {
         const st = n.start
         n.start = function (...b) {
           count.started += 1
+          return st.apply(this, b)
+        }
+      }
+      /* 素材路全靠 BufferSource 发声 —— 也必须数它的 start，
+         否则「音频图上有节点但一个都没播」会静默通过 */
+      if (key === 'buf' && n && !n.__hooked) {
+        n.__hooked = true
+        const st = n.start
+        n.start = function (...b) {
+          count.bufStarted += 1
           return st.apply(this, b)
         }
       }
@@ -202,9 +212,18 @@ out.nodesDuringRitual = {
   buf: count.buf - nBefore.buf,
   gain: count.gain - nBefore.gain,
   filter: count.filter - nBefore.filter,
-  started: count.started
+  bufStarted: count.bufStarted - nBefore.bufStarted
 }
-out.PASS_nodes = count.osc > nBefore.osc && count.buf > nBefore.buf && count.started > 0
+/* ⚠️ 这条判据在第二十五轮**改过一次写法**，原因值得记住：
+   原来断言的是「振荡器节点有增量 + osc.start() 被调过」—— 那是**合成路**的判据。
+   四个音都换成素材后，`createOscillator` 天然是 0（素材是一个 BufferSource），
+   于是这条断言把「完全正常、而且正是我们想要的」状态判成了失败。
+   ★ 「只在某一条实现路径上成立的门槛，不能无差别套到另一条路径上」。
+   现在的写法与路径无关：**只要在仪式期间真的启动了音源**就算通 ——
+   素材路数 BufferSource.start()，合成路数 osc.start()，两条都认。 */
+const dOscStarted = count.started - nBefore.started
+const dBufStarted = count.bufStarted - nBefore.bufStarted
+out.PASS_nodes = dBufStarted >= 1 || dOscStarted >= 1
 
 /* ── ②·六 每个音走的哪条路（第二十五轮新增）──────────────────────────
    四个音在整场仪式里都会响（charge→burst→flip→reveal）。
