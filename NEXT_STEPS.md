@@ -353,6 +353,7 @@ N="C:/Users/29923/.workbuddy/binaries/node/versions/22.22.2-3/node.exe"
 | `scripts/verify-halo.mjs` | 充能光晕消融实验（全量 / 隐 `.orb__charge` / 隐 `.orb__glow`），配 `scripts/_check_halo.py` 做径向亮度归属 |
 | `scripts/fetch-title-fonts.mjs` | **重新生成标题字体子集**（Google Fonts `text=` 端点 + `wOF2` 魔数校验）。改标题文案后跑它，见 §2 的字体那条 |
 | `scripts/probe-fonts.mjs <url>` | **字体探针**：验「每个字到底是谁画的」。自带 CDP 驱动、不经过 `--eval-file`（页面内拿不到 `CSS.getPlatformFontsForNode`）。三条判据 A/B/C 全过才 exit 0 |
+| `scripts/build-ambient.py <音频…>` | **BGM 素材处理**：AI 长氛围曲 → 无缝循环 mp3。等功率交叉淡化消接缝（不是「听不出来」，是**环上根本没有接缝**）+ 单声道 ABR 编码。`--probe` 只看指标不产出，末尾打印 `ALL_PASS`（判据是「接缝处跳变 ≤ 全曲 99.9 百分位 ×1.25」） |
 
 **探针清单**（都在 `scripts/flows/`，用 `run-flows.mjs` 调）：
 
@@ -363,7 +364,7 @@ N="C:/Users/29923/.workbuddy/binaries/node/versions/22.22.2-3/node.exe"
 | `probe-panel-worst` | **逐张遍历 22 张牌**，量每张的面板净空与重叠，报最坏 3 张。⚠️ **只能在开发模式跑**（依赖页内调试条） | `audit-draw` 只抽**随机一张**，抽不到文案最长的那张 → 拿不到最坏情况。这里靠写 `localStorage` 记录 + 切开发模式把 22 张**确定性地**过一遍 |
 | `probe-sfx` | 音效的**结构事实**：开关初始态与持久化、`AudioContext` 是否真被建出来且 `state === 'running'`、四类音频节点是否真连上、开关在面板弹出后是否仍可点 | **无头环境听不到声音**，但「没声音」的根因几乎总是结构问题：ctx 在非手势栈里被建成 `suspended`（**不报错、只是哑**）。做法是把 `window.AudioContext` 包成计数类，再给 `createOscillator/createBufferSource/...` 打钩子 |
 | `probe-sfx-off` | **反向**：从没点过开关的用户，抽完整张牌也不该被建出 `AudioContext` | 只验「开了会响」的话，`unlock()` 写成无条件的照样通过（第一版就是）。**判据要双向验**（第 19 条） |
-| `probe-ambient` | 环境音：节点**增量**（4 osc + 1 buf）/ 发出后 1.2s 内**零**自停（常驻性）/ 抽牌时 gain 从 0.18 压到 0.063 / 之后自己回到 0.18 / 关开关后 `stop()` ≥5 次 | 「环境音」这种东西无头环境听不到，但它的三种典型故障都能量出来：用一次性包络节点搭 drone（0.15s 自己停，现象是「点了没反应」）、duck 之后回不来、关开关停不掉。做法是给每个 `GainNode.gain` 装记录器收目标值序列 |
+| `probe-ambient` | **10 条判据**（§13 之前是 4 条，第二十四轮扩到 10）：① mp3 真的 `fetch` 到且 200 ② **走的是素材路不是偷偷退回合成**（`osc` 增量 = 0 且 buffer 时长 > 10s）③ **MP3 的编码器延时/尾零被排除在循环之外**（循环区外峰值 < 1e-3、区内 > 0.01、循环长 59.5–60.5s）④ 1.2s 内零自停 ⑤ 抽牌时 0.18→0.063 ⑥ 之后回到 0.18 ⑦ 关开关后活着的源全被 stop ⑧ 零报错 | ⚠️ **「素材没加载成功 → 悄悄退回合成」是本轮新增的一类静默故障**：页面照样有声音、控制台照样干净、截图照样看不出，只有细听才知道放的不是那首。所以第 ②③ 条必须用**结构**判（`createOscillator` 增量 + `loopStart/loopEnd` + 直接读 `getChannelData` 看循环区内外峰值），不能用「有没有声音」判 |
 | `audit-title` | 副标题↔牌面净空 ≥30px / 标题带不被顶出屏幕上缘 / 标题与副标题的**墨迹**与顶栏各段文字**零二维相交** / 碑铭线落在副标题下方与牌面之间 | 「标题靠上、和副标题重叠」这类问题里，**挪卡牌本身是无效的**（标题带是从卡牌顶边往上锚定的，两者一起平移，间距恒等于 `TITLE_GAP`），必须量到这个间距才不会改错方向（§12.3） |
 
 ```bash
@@ -373,7 +374,13 @@ N="C:/Users/29923/.workbuddy/binaries/node/versions/22.22.2-3/node.exe"
 "$N" scripts/run-flows.mjs probe-whispers --w 504 --h 784    # 窄屏：低语整层应 display:none
 "$N" scripts/run-flows.mjs probe-panel-worst --reduced       # 最坏净空（门槛 8px）；⚠️ 走 dev 端口
 "$N" scripts/run-flows.mjs probe-sfx probe-sfx-off           # 音效：开了会响 / 没开不建 ctx
+"$N" scripts/run-flows.mjs probe-ambient                      # BGM：下到了 / 走的素材路 / 循环干净 / duck / 停得掉
 "$N" scripts/run-flows.mjs audit-title --w 1100 --h 700      # 窄屏：标题不得撞上顶栏、不得被顶出上缘
+
+# BGM 素材：换素材 / 调循环长度 / 调音量时（--probe 只看指标不产出）
+"$N" scripts/build-ambient.py scripts/out/mglc/ambient-01_1.mp3 --probe
+"$N" scripts/build-ambient.py 输入.mp3 -o src/assets/audio/ambient-loop.mp3 \
+      --loop 60 --xfade 3.5 --kbps 48
 
 # 字体：改了标题带文案 → 先重抓子集，再问浏览器「谁画的」（A/B/C 三条判据，exit 0 才算过）
 "$N" scripts/fetch-title-fonts.mjs
@@ -1200,5 +1207,116 @@ CSS 45.89 kB，字体 woff2 6.39 + 6.54 kB 独立产出（Cinzel 1.7 KB 被 Vite
 
 **下一步不变**：发布上线（§2 P1）。字体若要扩到全站，务必**连 `probe-fonts` 的 `EXPECTED` 一起扩**，
 否则探针查的字比字体少，等于没查。
+
+
+## 14 · 2026-09-20 第二十四轮：BGM 换成 AI 素材 + 音效改用 AiSounds 生成
+
+起因是用户两条消息：①「你用芒果灵创生成的 bgm 效果不错」②「好像无法生成短时长的音效，
+我这里推荐用 Aiwave 来制作音效」。所以这一轮做了两件独立的事：**BGM 落地成素材**、
+**音效换成 AI 生成**（后者需要用户在平台侧操作，方案已备好）。
+
+### 14.1 BGM：从纯合成改成「素材优先、合成兜底」
+
+第二十三轮的环境音是**纯合成**的，理由是当时假设「音频素材零新增」。
+用户明确说 AI 生成的那版更好听 → 那条假设**被用户推翻**，改为用素材。
+
+- 素材：`src/assets/audio/ambient-loop.mp3`，**350,820 B (342.6 KB)**
+- 来源：`scripts/out/mglc/ambient-01_1.mp3`（芒果灵创 Mureka-9.5，205.7s / 3.29 MB）
+- 加工：`scripts/build-ambient.py --loop 60 --xfade 3.5 --kbps 48`
+  → 60 秒无缝循环、单声道、48kbps ABR、峰值 −3.0 dBFS、RMS −17.1 dBFS
+
+**为什么单声道不丢空间感**（这条反直觉，别改回去）：站内 BGM 要送进 `engine.js` 那条
+程序生成的**立体声**混响，左右宽度由 IR 去相关产生 —— 宽度来自混响，不来自源。
+所以源用单声道：省一半体积、避免低码率立体声的相位摆动，空间感一点不损失。
+
+**合成那版没删。** 它现在承担三个职责：`file://` 直接打开时 `fetch` 被 CORS 挡掉 → 退回它；
+素材缺失/解码失败 → 退回它；以及它是**永不重复**的（拍频 + 缓变滤波 + 随机点缀），
+是「素材循环听腻了」时的备选。接线在 `startAmbient()`：素材路同步建图、异步载入，
+载入失败才 `buildSynth()`。
+
+### 14.2 MP3 循环的坑：编码器延时 + 尾部补零（**必读**）
+
+MP3 编码会在**头部写入约 576~1152 个采样点的延时**、**尾部补零**对齐帧。
+这些字节解码后是**真静音**，而 `decodeAudioData()` 按规范**不剥掉它们**
+（LAME 写在 Xing/LAME 头里的 gapless 信息，Chrome 不解）。
+结果：每循环一圈多出 20~30ms 静音 —— 在连续 drone 上就是一个可闻的「噗」。
+
+修法不是重新编码，是用 **`loopStart` / `loopEnd`** 把这段静音排除在循环之外
+（见 `ambient.js` 的 `audibleRange()`，带**上限保护**：最多各剥 3000 点，
+免得把素材本身很轻的头尾误判成静音而切掉真内容）。
+
+本机实测：头剥 **345 点**、尾剥 **107 点**（共 ≈9.4ms），循环区 60.039s。
+探针直接读 `getChannelData` 断言「循环区外峰值 < 1e-3、区内 > 0.01」——
+这是「剥的正好是补零、没切到内容」的唯一直接证据。
+
+### 14.3 两个「判据本身写错」的教训（比 bug 更值钱）
+
+| 现象 | 真因 | 教训 |
+|---|---|---|
+| `probe-ambient` 的 `loopTrim` 恒为假，但代码是对的 | 断言里**写死了 44100** 换算秒数。`decodeAudioData` 会把音频**重采样到 AudioContext 的采样率**（本机 48000，不是文件的 44100）→ 缓冲区是 60.048×48000 而不是 ×44100。改用 `buffer.sampleRate` 后立刻通过 | **判据本身可以错，而且错了以后看起来像被测对象有问题。** 所以断言要用「被测对象自己报出来的参数」换算，不要用你记忆里的常量 |
+| `lameenc` 抛 `RuntimeError: Invalid mode` | `set_vbr()` 收的是**模式常量**（`VBR_OFF`/`VBR_RH`/`VBR_ABR`/`VBR_MTRH`），不是布尔值。传 `1` 会炸 | 第三方 C 扩展的参数语义要**实际探测**（`dir(lameenc)` 一行就能列出常量），别照印象写 |
+
+### 14.4 音效：为什么换平台 + 换成什么
+
+**芒果灵创做不了短音效，这是结构问题不是调参问题。** 实测：它只有
+`music` / `score` / `dubbing` 三种模式，**没有 SFX**。用「生成一声翻牌」的提示词提交，
+两个变体都交回来 **180 秒**的整首曲子。它擅长长氛围，短音效这条路是堵死的。
+
+**改用 AiSounds（爱声音坊）**，`aiwave.art` 跳转到 `aisounds.cn`：
+
+- 音效引擎是 **ElevenLabs Sound Effects**（1–30 秒，原生支持 Loop）
+- 语义层 DeepSeek V4 Pro 优化中文提示词 → **写中文效果更好**
+- 有「项目音效包」，就是为成组 UI / 游戏音效交付做的
+- 注册送 200 积分，无需绑卡；商用允许（游戏/短视频/播客/广告，不能转售）
+
+⚠️ **搜「AIWave」会撞到至少四个同名但无关的产品**（`aiwave.live` 是卖大模型 API 的网关、
+`audiowaveai` 是 TTS 应用、`airwaveai.com` 是工具导航站），有些收录站还把 aiwave 写成
+「歌曲生成工具、无 API、不支持二次集成」——**那是错的**（把两个产品混成一个了）。
+
+**四个音的提示词、时长、交付契约写在 `audio-src/README.md`**，直接照抄即可。
+要点是四条提示词里都要带上那半页「不要」（无音乐/旋律/节奏/鼓点/打击、
+无人声、无低频轰响、无尖锐咻声、无有音高的敲击）——那正是第二十三轮四个音被否掉的原因。
+
+**BGM 是从哪来的（provenance）** —— 这几个 `_` 前缀脚本就是那条链路，留着可复用：
+
+| 脚本 | 作用 |
+|---|---|
+| `scripts/_poll_mglc.py` | 轮询芒果灵创的异步音频任务直到落地 |
+| `scripts/_mglc_download.py` | 把结果下到本地（**返回的 URL 带签名和时效，不能直接引用**） |
+| `scripts/_mglc_analyze.py` | 解码后量形态（时长 / 频谱质心 / 动态范围 / 能量跳变率） |
+| `scripts/_mglc_viewer.py` + `_serve_range.py` | 生成试听页并起一个**支持 Range** 的本地服务（`http.server` 不支持分段请求，3 分钟的曲子不能拖进度条） |
+
+⚠️ 原始 mp3 在 `scripts/out/mglc/`（**被 `.gitignore` 排除**，不进仓库），
+所以 `build-ambient.py` 的命令示例在新克隆的机器上跑不了 —— 换素材时把新文件放进去即可。
+
+**下一步（等用户把文件放进 `audio-src/sfx/`）**：
+
+1. 写 `scripts/build-sfx.py`：去首尾静音 → 按时长裁齐 → 尾端 30ms 淡出防截断爆音
+   → **四个音按 RMS 统一配平**（四次独立生成的响度一定参差，不配平就会
+   「有的听不见、有的吓人」，这步不能省）→ 编码进 `src/assets/audio/`
+2. 改 `src/audio/sfx.js` 成素材优先、合成兜底（与 `ambient.js` 同一套路）
+3. 扩 `probe-sfx`：加「四个素材都下到且 200」「走的素材路不是兜底」「四个音的 RMS 差 ≤ 3dB」
+   三条判据 —— 尤其是第二条，它对应 §14.1 那类**静默退回**故障
+
+### 14.5 本轮验收
+
+| 项 | 结果 |
+|---|---|
+| `build-ambient.py` 两个变体 | 变体1 342.6 KB / 接缝比 0.944；变体2 340.8 KB / 接缝比 0.36 —— **都 PASS**（判据 ≤1.25）。选了**变体1**（质心 626Hz 更暗 = 更贴合「幽暗」，跳变 0.51/秒 更少 = 更像氛围层而不是曲子） |
+| `probe-ambient`（prod 4199） | **10/10 PASS** — `sourceKind: "asset"`、`onDelta {osc:0, buf:1}`、mp3 fetch **200**、buffer 60.048s/48000Hz/单声道、循环区 60.039s、循环区外峰值 5.4e-5 & 9.97e-5、区内 0.297、duck 0.18→0.063、recovered、`stopsOnOff 1 ≥ liveSources 1`、零报错 |
+| 回归 7 个 flow（prod 4199） | `probe-sfx` 10/10、`probe-sfx-off` 5/5、`audit-title` 4/4、`probe-whispers` 8/8、`probe-gallery` 9/9、`audit-draw` **pass:true**（牌 43vh / top 18.5% / bottom 61.5% / overlap 0 / clearance **39.2px**，与第二十三轮逐位一致）、`audit-motion` 无异常 |
+| `probe-panel-worst`（dev 4188） | **ALL_PASS** — 22 张全过，最坏净空 **50.1px**，零重叠 |
+
+`vite build`：**418 modules**，JS 318.85 kB（gzip 112.82），CSS 48.42 kB，
+`ambient-loop-SkECQZSt.mp3` 350.82 kB 作为独立哈希资源产出
+（生产下从 JS 里解析到的引用路径也验过：`200 / audio/mpeg / 350820 B`）。
+
+**体积预算参照**：站里单张卡牌 webp 是 280–335 KB，22 张 ≈ 6.6 MB，JS 约 1.07 MB。
+BGM 342.6 KB **比一张卡牌图还小**，加进来是合适的。
+
+> ⚠️ **`file://` 下 BGM 会退回合成**（`fetch` 被 CORS 挡）。
+> 这是**设计如此**，不是 bug —— 别为了「让 file:// 也有 BGM」去改成 `<audio>` 元素：
+> 那样一来 `createMediaElementSource` 在 `file://` 下会被 taint 成静音，
+> 二来开关就管不住它了（duck / 静音全失效）。
 
 

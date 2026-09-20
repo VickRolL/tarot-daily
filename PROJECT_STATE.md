@@ -5,10 +5,17 @@
 > 未完成的工作看 **`NEXT_STEPS.md`**（含具体做法、优先级、成本与踩坑提醒）。
 > 每次有实质进展都要回来更新本文档的「当前阶段」与「变更日志」。
 
-最后更新：2026-09-20（第二十四轮：**修掉一个「假完成」—— 标题的拉丁字体从来没生效过**）。
-第二十三轮做的 Cinzel 子集里装的其实是 Google 返回的 HTTP 400 错误页 HTML，而坏字体是**静默回退**的：
-不报错、截图看不出、构建无感，所以那一轮「标题换了罗马碑刻体」这个结论是**假的**。
-本轮修好，并把字体验收做成脚本 —— `fetch-title-fonts.mjs` 落盘**前**验 `wOF2` 魔数、
+最后更新：2026-09-20（第二十四轮：**BGM 换成 AI 生成的真素材** + 音效改用 AiSounds 生成）。
+用户说芒果灵创那版 BGM「效果不错」→ 那条「音频素材零新增」的假设**被用户推翻**：
+现在 `ambient.js` 是「**素材优先、合成兜底**」，素材 `assets/audio/ambient-loop.mp3` 342.6 KB /
+60 秒无缝循环（`scripts/build-ambient.py` 用等功率交叉淡化，接缝在数学上不存在）。
+音效这边查出**芒果灵创结构上没有 SFX 出口**（要「一声翻牌」它交回 180 秒的整首曲子），
+改用 AiSounds（= `aiwave.art`，音效引擎就是 ElevenLabs SFX）—— 四个音的提示词与交付契约
+见 `audio-src/README.md`，等用户生成后接线。
+第二十三轮收尾：**修掉一个「假完成」—— 标题的拉丁字体从来没生效过**。
+Cinzel 子集里装的其实是 Google 返回的 HTTP 400 错误页 HTML，而坏字体是**静默回退**的：
+不报错、截图看不出、构建无感，所以「标题换了罗马碑刻体」那个结论当时是**假的**。
+已修，并把字体验收做成脚本 —— `fetch-title-fonts.mjs` 落盘**前**验 `wOF2` 魔数、
 `probe-fonts.mjs` 直接问浏览器「这个字是谁画的」（A 脸状态 / B 逐字形 / C 页面真用上）。
 第二十三轮本体：音效四个音全部重做 + 幽暗寂静环境音 + 卡牌下挪（含「只挪卡牌是没用的」那条几何结论）+ 标题罗马碑刻体。
 再往前：第二十轮把水晶球换成真 3D（three.js，本项目对「不引入新依赖」的**唯一已批准例外**）、
@@ -103,8 +110,15 @@ tarot-app/
 │   │                              / probe-sfx（音效**结构事实**：ctx 是否真建起来且 running、
 │   │                                 四类节点是否真连上；听不了声音，就验这些）
 │   │                              / probe-sfx-off（反向：从没开过音效的用户不该被建 ctx）
-│   │                              / probe-ambient（环境音：节点增量 / 常驻性 / duck 与恢复 /
-│   │                                 关开关真的停 —— 给每个 GainNode.gain 装目标值记录器）
+│   │                              / probe-ambient（**10 条判据**：mp3 下没下到 / **走的素材路还是
+│   │                                 偷偷退回合成** / MP3 编码器延时有没有被排除在循环外 /
+│   │                                 常驻性 / duck 与恢复 / 关开关真的停。
+│   │                                 给每个 GainNode.gain 装目标值记录器 + 直接读 getChannelData）
+│   ├─ build-ambient.py          ⭐ **BGM 素材处理**（第二十四轮新增）：AI 长氛围曲 → 无缝循环 mp3。
+│   │                              等功率交叉淡化（接缝不是「听不出来」，是**环上根本不存在**）+
+│   │                              单声道（宽度由 engine.js 的立体声混响给，源用单声道省一半体积）+
+│   │                              ABR 编码（体积可预测）。`--probe` 只看指标不产出。
+│   │                              ⚠️ `lameenc.set_vbr()` 收的是**模式常量**（VBR_ABR 等），不是布尔值
 │   ├─ verify_manifest.mjs       ⭐ 按 `MANIFEST.sha256` 逐文件校验快照完整性（`node scripts/verify_manifest.mjs <目录>`）
 │   │                              —— 替代原先文档里那条五层转义的一行命令，见第 6 节第 31 条
 │   ├─ contact_sheet.py          总览拼版（22 张联络表，验收风格/边框一致性用）
@@ -125,6 +139,9 @@ tarot-app/
 │   ├─ card-styles/              出图历史与卡框源图（anime-v2 里有 FRAME_SRC，脚本需要）
 │   ├─ concept/                  主视觉概念图原图（v1）
 │   └─ previews/                 成品预览 + 总览 + **真实渲染截图 screen-*.png** + hero-preview-*.png
+├─ audio-src/                    ⭐ **音频源文件 + 生成说明**（第二十四轮新增）
+│   ├─ README.md                 音效该怎么生成：AiSounds 四个音的提示词 / 时长 / 交付契约
+│   └─ sfx/                      用户从 AiSounds 下载的音效丢这里，文件名必须是 charge/burst/flip/reveal
 └─ src/
     ├─ config/skin.js            ⭐ 皮肤名 / 素材槽位 / 底板与锚点 / 卡牌几何 / 时序（applySkinVars 灌 CSS 变量）
     ├─ config/lqip.js            ⚠️ 由 scripts/build_lqip.py 生成，不要手改
@@ -132,15 +149,19 @@ tarot-app/
     │                            `element` / `astrology` / `symbol` / `favor[2]` / `avoid[2]`
     ├─ data/whispers.js          ⭐ 两侧低语文案池（`WHISPER_LINES`：idle 22 条 + ritual 6 条 + `WHISPER_STATIC_STEP`）。
     │                            ⚠️ 导出名**不能**叫 `WHISPERS` —— `skin.js` 里那个是版式配置，重名会静默串用
-    ├─ audio/                    ⭐ 声音全程**合成**，零音频素材（第二十二轮建，第二十三轮重做）
+    ├─ audio/                    ⭐ 声音：**BGM 用 AI 素材**（第二十四轮起），音效仍全程合成（第二十二轮建，第二十三轮重做）
     │   ├─ engine.js             ⭐ 音频底座：ctx / 总线 / **程序化厅堂混响**（现算 IR）/ 包络与噪声工具。
     │   │                        音效与环境音共用同一个 ctx 与总线 —— 否则开关只关得掉一半。
     │   │                        三条规矩写在文件头：默认关 / ctx 只在手势里建 / 增益必走包络
     │   ├─ sfx.js                四个音（第二十三轮全部重做）：屏息 / 雾散 / 丝绢 / 颂钵。
     │   │                        ⚠️ 判据：**50ms 内把能量堆到 200Hz 以下的写法一律不许出现**
     │   │                        （上一版「汽车加速 / 拍鼓 / 手鼓 / 电子叮」全部违反它）
-    │   └─ ambient.js            环境音「幽暗寂静」：双失谐 drone + 风 + 稀疏点缀 + 混响。
-    │                            抽牌时 duck 到 35%；页面切后台静音；淡入 3.5s。
+    │   │                        第二十四轮起计划改成「AiSounds 素材优先、这份合成兜底」
+    │   └─ ambient.js            ⭐ 环境音「幽暗寂静」。**素材优先、合成兜底**（第二十四轮）：
+    │                            素材走 `assets/audio/ambient-loop.mp3`（60s 无缝循环）；
+    │                            失败（`file://` 的 CORS / 缺文件 / 解码失败）才退回合成那版
+    │                            （双失谐 drone + 风 + 稀疏点缀，**永不重复**，是「循环听腻了」的备选）。
+    │                            礼仪三条：抽牌时 duck 到 35%、切后台静音、默认关且淡入 3.5s。
     │                            ⚠️ drone 是常驻振荡器，**不能**用 sfx 那种一次性包络节点搭
     ├─ assets/fonts/             ⭐ 标题专用字体子集（合计 **10.0 KB**）：
     │                            `title-latin.woff2`  Cinzel 可变字重 400..900  `TAROT·`        1.82 KB
@@ -148,7 +169,12 @@ tarot-app/
     │                            `title-han-400.woff2`Noto Serif SC 400        `日签`+全部副标题 6.57 KB
     │                            再生成：`node scripts/fetch-title-fonts.mjs`（含 `wOF2` 魔数校验）
     │                            验收：`node scripts/probe-fonts.mjs <url>`（问浏览器「这个字是谁画的」）
-    │                            ⚠️ 汉字只有 400 / 900 两档 → 用 `var(--font-title)` 的地方**字重只能取这两个值**；
+    │                            ⚠️ 汉字只有 400 / 900 两档 → 用 `var(--font-t
+    ├─ assets/audio/             ⭐ BGM 循环素材（第二十四轮新增）
+    │                            `ambient-loop.mp3` **350,820 B (342.6 KB)** / 60s 无缝循环 / 单声道 48kbps ABR
+    │                            来源：芒果灵创 Mureka-9.5 出的 205.7s 长氛围曲
+    │                            加工：`python scripts/build-ambient.py …`（等功率交叉淡化消接缝）
+    │                            ⚠️ 体积参照：站里单张卡牌 webp 是 280–335 KB → BGM **比一张卡牌图还小**itle)` 的地方**字重只能取这两个值**；
     │                               写 600 会被就近匹配到 900 脸，而 900 子集里有「签」没有「日」，
     │                               「日」会继续回退到系统宋体 —— 同一个词两种字体（第二十四轮踩过）
     │                            ⚠️ 改标题带文案要**同步改两处**：`fetch-title-fonts.mjs` 的 `SPECS`
@@ -320,6 +346,8 @@ WebP 压缩后（牌面按实际显示 2 倍图 768×1123）：
 | 牌背 `card-back` | 179 KB | 含 CARD_ASPECT 比例缩放（由脚本现读 `skin.js`） |
 | 分享封面 `og-cover.jpg` | 103 KB | 1200×630 |
 | 低清占位 `lqip.js` | 0.1 KB | 内联 data URI，不额外发请求 |
+| 标题字体子集 `assets/fonts/` | 10.0 KB | 3 个 woff2（Cinzel + Noto Serif SC 900/400），第二十三轮 |
+| **BGM 循环 `assets/audio/ambient-loop.mp3`** | **342.6 KB** | 60s 无缝循环 / 单声道 48kbps ABR，第二十四轮。**比一张卡牌图还小** |
 
 原始出图母版存在 `assets/card-art/`（22 张 PNG 约 57 MB）与 `assets/hero-art/`。
 
@@ -1455,3 +1483,66 @@ APP_URL=http://127.0.0.1:4199/ "$N" scripts/run-flows.mjs audit-title audit-draw
     ② 列验收表要**按「我改了什么」逐条列，而不是按「我有什么探针」列** ——
     第二十三轮那张表看着挺全（4 个探针全绿），但它只覆盖了我改动最大的部分，
     而**字体恰恰是唯一出错的东西**。
+- **2026-09-20（第二十四轮 · BGM 换成 AI 素材 + 音效改用 AiSounds 生成）**
+  用户两条：①「你用芒果灵创生成的 bgm 效果不错」②「好像无法生成短时长的音效，
+  我这里推荐用 Aiwave 来制作音效」。于是这一轮做两件独立的事。
+  - **① BGM 素材化 →「素材优先、合成兜底」**。第二十三轮的环境音是纯合成的，
+    依据是一条当时成立的假设：「音频素材零新增」。用户明确说 AI 那版更好听 →
+    **假设被推翻**，改为用素材。素材 `src/assets/audio/ambient-loop.mp3`
+    **350,820 B (342.6 KB)**，来自芒果灵创 Mureka-9.5 出的 205.7s / 3.29 MB 长氛围曲，
+    经 `scripts/build-ambient.py` 裁成 **60 秒无缝循环**、单声道、48kbps ABR、峰值 −3.0 dBFS。
+    - **为什么单声道不丢空间感**（反直觉，别改回去）：站内 BGM 要送进 `engine.js` 那条
+      程序生成的**立体声**混响，左右宽度由 IR 去相关产生 —— 宽度来自混响，不来自源。
+      源用单声道：省一半体积、避免低码率立体声的相位摆动，空间感一点不损失。
+    - **合成那版没删**，它承担三个职责：`file://` 下 `fetch` 被 CORS 挡 → 退回它；
+      素材缺失/解码失败 → 退回它；以及它**永不重复**（拍频 + 缓变滤波 + 随机点缀），
+      是「素材循环听腻了」的备选。
+    - **等功率交叉淡化**：取 `L+X` 秒输出 `L` 秒，尾部淡出的同时叠上头 X 秒淡入 ——
+      数学上保证 `out[L-1] → out[0]` 与 `out[X-1] → out[X]` 两处都连续。
+      **接缝不是「听不出来」，是环上根本不存在。** ⚠️ 所以**不能**在循环两端加淡入淡出，
+      那会让每一圈都在音量上「喘一口气」，比接缝还明显。
+    - **MP3 循环的坑（必读）**：MP3 编码在头部写入 576~1152 级采样点的延时、尾部补零对齐帧，
+      这些解码后是**真静音**，而 `decodeAudioData()` 按规范**不剥掉**（LAME 的 gapless 信息 Chrome 不解）
+      → 每圈多 20~30ms 静音，在连续 drone 上就是一个可闻的「噗」。
+      修法不是重新编码，是用 **`loopStart` / `loopEnd`** 把静音排除在循环之外
+      （`ambient.js` 的 `audibleRange()`，带**上限保护**最多各剥 3000 点，
+      免得把素材本身很轻的头尾误判成静音）。本机实测头剥 345 点、尾剥 107 点、循环区 60.039s。
+    - **体积预算**：站里单张卡牌 webp 是 280–335 KB、22 张 ≈ 6.6 MB、JS ≈ 1.07 MB。
+      BGM 342.6 KB **比一张卡牌图还小**。
+  - **② 音效：芒果灵创结构上做不了 → 改用 AiSounds**。实测它只有 `music`/`score`/`dubbing`
+    三种模式，**没有 SFX**：用「生成一声翻牌」的提示词提交，两个变体都交回 **180 秒**的整首曲子。
+    （同一轮顺带把「AI 生成的到底是不是音效」这件事量化了：解码后量时长 / 频谱质心 /
+    动态范围 / 能量跳变率 —— 180.25s + 0.65~0.81 次/秒的跳变 = 是曲子不是音效。）
+    改用 **AiSounds（爱声音坊）**，`aiwave.art` 跳转到 `aisounds.cn`，音效引擎就是
+    **ElevenLabs Sound Effects**（1–30s，原生支持 Loop），语义层用 DeepSeek V4 Pro 优化中文提示词
+    → **写中文比写英文好**；有「项目音效包」为成组交付而做；注册送 200 积分。
+    ⚠️ 搜「AIWave」会撞到至少四个同名无关产品（`aiwave.live` 是卖大模型 API 的网关、
+    `audiowaveai` 是 TTS 应用、`airwaveai.com` 是工具导航站），有些收录站还把 aiwave 写成
+    「歌曲生成工具、无 API」——**那是错的**（把两个产品混成一个了）。
+    四个音的提示词 / 时长 / 交付契约写在 **`audio-src/README.md`**。
+  - **③ 两类新增的静默故障，都变成了判据**：
+    （a）**「素材没加载成功 → 悄悄退回合成」** —— 页面照样有声音、控制台干净、截图看不出。
+    所以 `probe-ambient` 从 4 条扩到 **10 条**，第一条就是「走的是素材路还是兜底」，
+    用**结构**判（`createOscillator` 增量 = 0 + buffer 时长 > 10s），不是用「有没有声音」判。
+    （b）**「MP3 尾零没被排除」** —— 靠直接读 `getChannelData` 断言
+    「循环区外峰值 < 1e-3、区内 > 0.01」。
+  - **④ 两个「判据本身写错」的教训**（比 bug 更值钱）：
+    （a）`probe-ambient` 的 `loopTrim` 恒为假，**而代码是对的** ——
+    断言里写死了 44100 换算秒数，但 `decodeAudioData` 会把音频**重采样到 AudioContext 的采样率**
+    （本机 48000）。改用 `buffer.sampleRate` 后立刻通过。
+    **判据本身可以错，而且错了以后看起来像被测对象有问题** → 断言必须用被测对象自己报出来的参数换算。
+    （b）`lameenc.set_vbr()` 收的是**模式常量**（`VBR_OFF`/`VBR_RH`/`VBR_ABR`/`VBR_MTRH`）不是布尔值，
+    传 `1` 抛 `RuntimeError: Invalid mode` —— 第三方 C 扩展的参数语义要实际探测（`dir()` 一行就能列）。
+  - **验收**：`probe-ambient`（**生产构建** 4199）**10/10 PASS** —— `sourceKind: "asset"`、
+    `onDelta {osc:0, buf:1}`、mp3 fetch **200**、buffer 60.048s/48000Hz/单声道、
+    循环区外峰值 5.4e-5 & 9.97e-5 / 区内 0.297、duck 0.18→0.063 → recovered、
+    `stopsOnOff 1 ≥ liveSources 1`、零报错；回归 7 个 flow 全过
+    （`audit-draw` **pass:true**，clearance **39.2px** 与第二十三轮逐位一致）；
+    `probe-panel-worst`（dev）ALL_PASS，22 张全过、最坏净空 50.1px、零重叠。
+    `vite build` **418 modules**，JS 318.85 kB（gzip 112.82），
+    `ambient-loop-SkECQZSt.mp3` 350.82 kB 作为独立哈希资源产出
+    （生产下从 JS 里解析到的引用路径也验过：200 / audio/mpeg / 350820 B）。
+  - **下一步**：等用户把 AiSounds 生成的四个音放进 `audio-src/sfx/` →
+    写 `scripts/build-sfx.py`（去首尾静音 / 裁齐时长 / 尾端 30ms 淡出防截断爆音 /
+    **四个音按 RMS 统一配平**）→ 改 `sfx.js` 成素材优先合成兜底 → 扩 `probe-sfx` 三条判据。
+    再往后仍是**发布上线**。
