@@ -29,15 +29,15 @@ BACKUP = os.path.join('scripts', 'out', '_raw-backup-20260921-012259')   # 换�
 OTHER_RMS = {'charge': -17.1, 'burst': -16.1, 'reveal': -17.2}
 
 # 当前构建进站点的那一条（改这里 + 重跑 build-sfx.py 即可换音）
-CHOSEN = 's1-60'
+CHOSEN = 's2-50'
 
 # 候选顺序 = 试听顺序。带说明的是「这条是什么」。
 CANDS = [
-    ('s1-60', '一记擦碰 + 一点纸的颤（当前选用）', 'One flick only, fast and clean'),
-    ('s1-50', '同上，但只生成 0.5 秒', '同稿，更短'),
+    ('s2-50', '「snap」措辞 —— 你选定的（音色最脆最亮，手势仍超标）', 'A snappy card flip'),
+    ('s1-60', '一记擦碰 + 一点纸的颤（上一版现役，手势最干净）', 'One flick only, fast and clean'),
+    ('s1-50', '同 s1-60，但只生成 0.5 秒', '同稿，更短'),
     ('s3-50', '更硬的「啪」，带一点点纸的颤', 'One sharp card flip'),
     ('s3-60', '同上，生成 0.6 秒', '同稿，更长'),
-    ('s2-50', '「snap」措辞 —— 指标没过（更像持续擦碰）', 'A snappy card flip'),
 ]
 
 

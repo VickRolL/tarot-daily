@@ -5,12 +5,12 @@
 > 未完成的工作看 **`NEXT_STEPS.md`**（含具体做法、优先级、成本与踩坑提醒）。
 > 每次有实质进展都要回来更新本文档的「当前阶段」与「变更日志」。
 
-最后更新：2026-09-21（第二十七轮：**③ flip 按「利落一点」重做并接进站点**，
-并揪出「流水线会把瞬态填满」这条**静默故障**；判据与回归全过，只差用户试听拍板。
-详见 `NEXT_STEPS.md` §18）。
+最后更新：2026-09-21（第二十八轮：**③ flip 由用户试听后拍板定稿 `s2-50`**，
+已替换、重建、验收通过；顺手修掉一个「素材变小 → 打包器把它内联进 JS」的构建故障。
+详见 `NEXT_STEPS.md` §19）。
 
-> ### 音效现状：④ reveal 用户认可；③ flip **已按「一次起手」重做并接进站点（待试听拍板）**；
-> ### ① charge / ② burst **已重做并接进站点（待用户试听拍板）**
+> ### 音效现状：四个音全部定稿并在站点在用（③ 为用户拍板版）
+> ### ① charge · ② burst · ④ reveal 待用户耳朵最终确认；③ flip 已由用户选定 `s2-50`。
 >
 > 用户原话：`charge`「听起来像雷云滚滚」「比较吵」；`burst`「像电饭煲烧开打开的时候」。
 > 实测证实两个音是**同一形状的两个极端**（`scripts/out/charge-spec.log`）：
@@ -46,7 +46,13 @@
 > 像翻了两三张牌，要**利落一点**」→ 没换音色方向，只把 **3 次起手 / 0.563s 跨度**压成
 > **一次起手**。关键收获：那层「沙子」**不是素材的，是流水线 RMS 归一 + 软削顶填出来的**
 > （消融证据：duty 0.151 → 0.891），已补「**手势守恒**」判据堵住这个静默缺口。
-> 现站点用的是 **s1-60**；候选对比页 `audio-src/candidates/flip.html`，同样待拍板。
+> 现站点用的是 **s2-50**；候选对比页 `audio-src/candidates/flip.html`。
+>
+> **✅ ③ flip 定稿（2026-09-21 第二十八轮）**：候选页给用户试听后，他选了 **`s2-50`**
+> （0.5s，成品 0.522s，质心 8126Hz —— 五条里最亮也最短）。
+> ⚠️ 记一笔：**这条在手势指标上反而是五条里最差的**（铺满度 0.686 / 末次起手 64%，两项超标），
+> 用户看得到那两项超标标记仍然选它 → **他抱怨的是「手势」，打动他的却是「音色 + 时长」**。
+> 详见 `NEXT_STEPS.md` §19.2（含「要补就补质心与时长的双侧区间，不是继续收紧 duty」的结论）。
 >
 > 三个方法论级收获（详见 `NEXT_STEPS.md` §17）：
 > 1. **直连 ElevenLabs 写中文提示词基本等于随机**（质心 5846~7681Hz，全是嘶声），
@@ -1727,7 +1733,8 @@ APP_URL=http://127.0.0.1:4199/ "$N" scripts/run-flows.mjs audit-title audit-draw
     charge 纯限幅零削顶）· `probe-sfx` **dev 与 prod 各 ALL_PASS**（`sfxStatsDrift` 空、
     `sfxOverContract` 空；prod 抓到的正是新哈希资源）· `probe-sfx-off` / `probe-ambient` /
     `probe-devbar-sfx` / `audit-title` / `audit-draw` 全过（`"pass":false` 零命中）·
-    `vite build` 干净（`devbar` / `屏息` / `setForceSynth` 零命中）。
+    `vite build` 干净（`devbar` / `屏息` / `setForceSynth` 零命中 —— ⚠️ 第二十八轮全扫发现
+    这句只对 **JS** 成立，**CSS** 里仍有 `.devbar` 死规则，见 `NEXT_STEPS.md` §19.9）。
   - **成品实测**：charge 1.045s / -17.1dB / -12.0dBFS（质心 431Hz、次低频 0.010）·
     burst **1.515s** / -16.1dB / -3.3dBFS（质心 1715Hz、>4kHz 0.153、尾段 -31dB）。
   - ⚠️ **仍留给耳朵的一件事**：charge 现在走 `100Hz × 1`，**偏「厚」**。
@@ -1770,3 +1777,50 @@ APP_URL=http://127.0.0.1:4199/ "$N" scripts/run-flows.mjs audit-title audit-draw
   - **交付物**：`audio-src/candidates/flip.html` —— 5 条候选（s1-50 / s2-50 / s3-50 / s1-60 / s3-60）
     各走**完整流水线**后的成品对比 + 被否决的旧版作对照，数字由指标文件生成、不手抄。
     **当前站点里放的是 s1-60**，等用户听完拍板。
+
+- **2026-09-21（第二十八轮 · ③ flip 定稿：用户在五条候选里选了 `s2-50`）**
+  用户听完候选试听页后给了结论：**「我会选 S2-50 这一个」**。已按选择完成替换、重建与验收。
+  `charge` / `burst` / `reveal` 未动。
+
+  - **`s2-50` 是什么**：0.5s 素材（成品 `0.522s`），英文稿
+    「A snappy card flip: one short, tight, crisp snap of a single playing card
+    turning over quickly, bright paper texture, sharp attack, the tail stops at once.」，
+    铺满度 0.589、2 次起手、**质心 5483Hz（五条里最亮）**。
+  - **⚠️ 一个必须记下来的事实：这条在手势维度上是五条里最差的。**
+    成品铺满度 **0.686**（自定阈值 0.55）、末次起手 **64%**（阈值 45%）**两项超标**；
+    而上一版 `s1-60` 分别是 0.200 / 32%。也就是说**用户抱怨的是「手势」，
+    但最终打动他的是「音色 + 时长」**（质心最亮 8126Hz、时长最短 0.522s，
+    比 `s1-60` 短 17%）。候选页上这两项超标是**明示**的，用户看过仍选它 → 耳朵拍板成立。
+    → 可复用结论：**听感里的「利落」不只由 duty / 末次起手构成，还包含亮度和绝对长短**。
+    要补判据应该给 `centroid_Hz` 和时长加**双侧区间**，而不是继续收紧 duty。
+  - **「手势守恒」判据这次没有拦**：`s2-50` 素材 duty 0.589 > 0.5 → 被判为**持续型、免检**。
+    这是判据设计的有意之处（持续型不该按瞬态标准要求），但也意味着
+    **现役文件目前不受这条判据保护** —— 已在 `audio-src/README.md` ③ 节明写。
+  - **新增的备份退路**：上一版 `s1-60` 的素材备份在
+    `scripts/out/_raw-backup-20260921-014500/flip-raw.mp3`，
+    想退回直接覆盖 `audio-src/sfx/_raw/flip-raw.mp3` 再 `build-sfx.py --force` 即可。
+  - **改动**：`audio-src/sfx/_raw/flip-raw.mp3` 换成 `s2-50`；
+    `_make_flip_page.py` 的 `CHOSEN` 改 `s2-50`（并把 s2-50 提到候选列表首位、
+    s1-60 标注为「上一版现役」）；成品 `flip.mp3` 重出。
+  - **验收**：`build-sfx.py --force` **ALL_PASS true**（flip 解码后 -18.0dB / -1.1dBFS /
+    0.522s / 软削顶 0.69%，比上一版 2.13% 更低；四音响度离散 **1.9dB**）·
+    `probe-sfx` dev 与 prod **各 ALL_PASS**（`sfxStatsDrift` 空、`sfxPeakOver` 空）·
+    8 个 flow 回归全过 · `vite build` **JS 干净**（`devbar` / `setForceSynth` 零命中）。
+  - **⚠️ 顺手纠正一条被引用了三轮的不实断言**：文档里一直写「产物里 `devbar` 零命中」，
+    这轮逐文件全扫发现 **CSS 里仍有 7 条 `.devbar` 死规则（857 字节，占 CSS 1.8%）**——
+    那是 Tailwind 按源码里的类名字面量生成的，**JS 摇掉了但 CSS 不会跟着走**。
+    功能无影响（真机上 DevBar 确实不存在），但**断言本身按字面是假的**：
+    它当初大概只在 JS 上 grep 过，写进文档却写成了「产物」。
+    → 规矩：写「X 零命中」必须注明**扫的范围**。详见 `NEXT_STEPS.md` §19.9。
+  - **⚠️ 顺手修掉一个「换素材换出来的构建故障」：Vite 把小音频内联进了 JS。**
+    `flip.mp3` 缩到 **4010 字节**，低于 Vite 默认的 `assetsInlineLimit` **4096** →
+    它被编码成 base64 data URI 塞进 JS 包，**构建产物里不再有 `flip-<hash>.mp3`**。
+    症状：`probe-sfx` 那条「四个 mp3 都被下载」的判据按 `*.mp3` 文件名匹配请求，
+    data URI 的 basename 不是 `.mp3` → **生产上直接判红**（dev 上仍绿，因为 dev 不内联）。
+    已修：`vite.config.js` 加 `build.assetsInlineLimit`，对音视频扩展名一律返回 `false`，
+    其他小资源保持默认。修完 `dist/assets/flip-CxGpJFXG.mp3` 正常产出、JS 包小了 5.3KB。
+    → **教训：判据里的「资源被下载了」这类断言，会被打包器的内联优化静默击穿；
+      素材变小可能改变构建行为**（阈值判据的经典陷阱）。
+  - **成品实测（现役四音）**：charge 1.045s / -17.1dB / -12.0dBFS ·
+    burst 1.515s / -16.1dB / -3.3dBFS · **flip 0.522s / -18.0dB / -1.1dBFS** ·
+    reveal 4.049s / -17.2dB / -3.1dBFS。

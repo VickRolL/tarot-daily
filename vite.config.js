@@ -27,6 +27,24 @@ export default defineConfig(({ command }) => ({
     __DEV_TOOLS__: JSON.stringify(command === 'serve')
   },
   plugins: [react(), tailwindcss()],
+  build: {
+    /**
+     * ⚠️ 音频**一律不内联**（2026-09-21 第二十八轮踩到）。
+     *
+     * Vite 默认的 `assetsInlineLimit` 是 **4096 字节** —— 小于它的资源会被编码成
+     * base64 data URI 塞进 JS 包里。四个音效原来都大于这个尺寸所以一直是独立文件；
+     * 这轮把 `flip` 换短之后它变成 **4010 字节**，于是：
+     *   · 构建产物里**没有** `flip-<hash>.mp3` 了（其余三个还在）；
+     *   · `probe-sfx` 那条「四个 mp3 都被下载」的判据按 `*.mp3` 文件名匹配请求，
+     *     而 data URI 的 basename 不是 `.mp3` → **生产上直接判红**；
+     *   · 「三个是文件、一个是内联」这种形状不一致最容易误导后来人查半天。
+     *
+     * 音频本来就该走独立文件：可单独缓存、可 Range、不进 JS 包。
+     * 只对音视频关掉内联，其他小资源（图标等）保持 Vite 默认行为。
+     */
+    assetsInlineLimit: (filePath) =>
+      /\.(mp3|m4a|aac|ogg|oga|wav|flac|mp4|webm)$/i.test(filePath) ? false : undefined
+  },
   server: {
     port: 5173,
     host: '127.0.0.1'

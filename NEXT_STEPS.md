@@ -1705,7 +1705,7 @@ flip 峰值系数大，三个约束互相拉扯：**零钳位样本** · **峰�
 | `probe-sfx` dev | **ALL_PASS**，`sfxStatsDrift` 空、`sfxPeakOver` 空 |
 | `probe-sfx` prod(4199) | **ALL_PASS**，抓到 `flip-DoXlLpbD.mp3` / `burst-CcC0X5pC.mp3` 等新哈希 |
 | 回归 8 flow | `probe-sfx-off` / `probe-ambient` / `probe-devbar-sfx` / `probe-charge` / `audit-title` / `audit-draw` / `dev-verify` 全过 |
-| `vite build` | 干净；`devbar` / `setForceSynth` 零命中，dist 的 flip 哈希与源一致 |
+| `vite build` | 干净；`devbar` / `setForceSynth` 零命中，dist 的 flip 哈希与源一致（⚠️ 这句要修正：**JS** 零命中，**CSS** 里还有 `.devbar` 死规则 —— 见 §19.9） |
 
 ### 18.7 剩下的一步：**用户用耳朵拍板**
 
@@ -1727,3 +1727,138 @@ flip 峰值系数大，三个约束互相拉扯：**零钳位样本** · **峰�
    找那层沙子是哪来的，答案是流水线自己造的。
 3. **判据要覆盖「保持」而不是只覆盖「达到」**：原有判据全在管「响度够不够、有没有削顶」，
    没一条管「瞬态有没有被填平」—— 于是故障静默。**手势守恒**就是补这个缺口。
+
+## 19 · 2026-09-21 第二十八轮：③ flip 定稿（用户在候选里选了 `s2-50`）
+
+用户原话：**「我会选 S2-50 这一个」**。已按选择替换、重建、验收完毕。
+`charge` / `burst` / `reveal` 未动。
+
+### 19.1 选了什么
+
+| | `s2-50`（现役） | `s1-60`（上一版） | 旧版（被否） |
+|---|---|---|---|
+| 素材时长 | 0.5s（成品 **0.522s**） | 0.6s（成品 0.627s） | 1.0s（成品 0.862s） |
+| 成品质心 | **8126Hz** | 6142Hz | — |
+| 成品时长 | **0.522s** | 0.627s | 0.862s |
+| 成品铺满度 | **0.686** ⚠️ | 0.200 | 0.869 |
+| 末次起手位置 | **0.641** ⚠️ | 0.317 | 0.774 |
+| 软削顶 | 0.69% | 2.13% | 1.44% |
+
+稿子（英文，直连 ElevenLabs 的必须条件）：
+```
+A snappy card flip: one short, tight, crisp snap of a single playing card
+turning over quickly, bright paper texture, sharp attack, the tail stops at once.
+```
+
+### 19.2 ★ 记一笔：用户抱怨的是「手势」，最后打动他的是「音色 + 时长」
+
+`s2-50` 是五条候选里**手势最"满"**的一条 —— 铺满度 0.686、末次起手 64%，
+**两项都超过我们按他第一轮意见定的阈值**（0.55 / 0.45），而上一版 `s1-60` 是 0.200 / 0.317。
+候选页上这两项超标是**明示**的（红字 + 「2 项超标」pill），用户看过仍然选它。
+
+他选它的理由从数据上很清楚：**质心 8126Hz（五条里最亮）+ 时长 0.522s（最短）**。
+
+> **可复用结论**：听感里的「利落」不是单一维度。这次量出来的「手势」抓住了
+> 「有几下、挤不挤在开头」；但**亮度（质心）和绝对长短同样在起作用**，
+> 而当时的判据只给了质心一个**很宽的单侧下限**（600~9500Hz），等于没约束。
+> → 要补就补 `centroid_Hz` 的**双侧区间**和时长区间，**不是继续收紧 duty**。
+> → 也别因此推翻「手势守恒」判据：它抓的是**真故障**（流水线把瞬态填平、旧版 0.24→0.89），
+>   这次没拦是因为 `s2-50` **素材本身** duty 0.589 > 0.5，被判为持续型、免检 —— 判据在按设计工作。
+
+### 19.3 判据现状（要诚实记的）
+
+- 「手势守恒」**目前没有在看守现役文件**（`s2-50` 被判持续型）。这是设计内的豁免，
+  但必须写在文档里，否则下一个人会以为现役文件被守住了。已在 `audio-src/README.md` ③ 节明写。
+- 其余判据照常：峰值不过满刻度（pinned 0）、响度离散 ≤3dB（实测 **1.9dB**）、
+  四音素材全部走素材路、探针在 dev 与 prod 各跑一次。
+
+### 19.4 验收（全部通过）
+
+| 项 | 结果 |
+|---|---|
+| `build-sfx.py --force` | **ALL_PASS true**；flip 解码后 **0.522s / -18.0dB / -1.1dBFS** / 软削顶 **0.69%** |
+| 响度离散 | **1.9dB**（charge -17.1 / burst -16.1 / flip -18.0 / reveal -17.2） |
+| `probe-sfx` dev | **ALL_PASS**，`sfxStatsDrift` 空、`sfxPeakOver` 空 |
+| `probe-sfx` prod | **ALL_PASS** |
+| 回归 8 flow | `probe-sfx-off` / `probe-ambient` / `probe-devbar-sfx` / `probe-charge` / `audit-title` / `audit-draw` / `dev-verify` 全过（`"pass":false` 零命中） |
+| `vite build` | **JS 干净**（`devbar` / `setForceSynth` 零命中）；⚠️ **CSS 里仍有 7 条 `.devbar` 死规则（857 字节）** —— 见 §19.9 |
+
+### 19.9 ⚠️ 顺手纠正一条文档里的**不实断言**：`devbar` 在产物里**不是**零命中
+
+R26 / R27 的验收表里反复写着「`vite build` 干净，产物里 `devbar` / `屏息` / `setForceSynth` **零命中**」。
+这轮做逐文件全扫时发现：**这句话按字面是假的。**
+
+| 扫的范围 | `devbar` 命中 |
+|---|---|
+| `dist/**/*.js`（含 `index-*.js`、`three.module-*.js`） | **0** ✅ 代码确实被摇掉了 |
+| **`dist/**/*.css`**（`index-DX94Zmgj.css`） | **7 条规则 / 857 字节** ❌ |
+
+命中的是纯 CSS 规则（`.devbar{…}` / `.devbar>*` / `.devbar__cap` / `.devbar button` …），
+来自 Tailwind 的类扫描：**类名在源码里是字面量字符串**，所以即使用到它的 JS 被 rollup 摇掉，
+样式照样会被生成进 CSS。CSS 产物 48.7KB，这 857 字节约占 **1.8%**。
+
+> **为什么这条值得记**：原来的断言大概是**只在 JS 上 grep** 的，写进文档时却写成了「产物」。
+> 于是**一条从没被完整验过的断言，被当成既成事实引用了三轮**。
+> → 写「X 零命中」时，**必须写清扫了哪些扩展名 / 哪些目录**；
+>   只扫了一部分就写全称，等于造了一个**永远不会因为真实原因变红**的假绿灯。
+> → 而且它**不影响功能**（真机上 DevBar 确实不存在，`probe-devbar-*` 与 prod 探针都能证明），
+>   所以没人会去复查它 —— 这正是它能活三轮的原因。
+>
+> **可选的收尾**（本轮没做，不影响上线）：让 Tailwind 不扫 DevBar 那几个文件
+> （`@source not "…"`，或把它的样式从被扫描的 CSS 入口里挪出去），CSS 能省约 1.8%。
+
+
+### 19.5 退路
+
+上一版 `s1-60` 的素材备份在 `scripts/out/_raw-backup-20260921-014500/flip-raw.mp3`。
+想退回：覆盖 `audio-src/sfx/_raw/flip-raw.mp3` → 改 `_make_flip_page.py` 的 `CHOSEN` →
+`build-sfx.py --force`。
+
+### 19.6 ★ 换素材换出来的构建故障：**Vite 把小的音频内联进了 JS**
+
+`flip.mp3` 从 4997 字节缩到 **4010 字节**，**低于 Vite 默认的 `assetsInlineLimit` = 4096**。
+于是它被编码成 base64 data URI 塞进 `index-*.js`，**`dist/assets/` 里再也没有 flip 的 mp3**
+（其余三个大于 4096，照旧是独立文件）。
+
+| | 修之前 | 修之后 |
+|---|---|---|
+| `dist/assets/flip-*.mp3` | **不存在**（被内联） | `flip-CxGpJFXG.mp3` 4010B |
+| `index-*.js` 体积 | 336,328 B | 330,982 B（−5.3KB，正是那份 base64） |
+
+**症状与判据的关系**：`probe-sfx` 的 `PASS_sfxDownload` 按 `*.mp3` **文件名**匹配网络请求
+（`baseName(url).startsWith(assetName)`）。data URI 的 basename 是 `data:audio/mpeg;base64,...`，
+不以 `.mp3` 结尾 → **匹配不到** → `sfxHits.length = 3 < 4` → **生产判红**。
+而 **dev 上仍然是绿的**（dev 不套 `assetsInlineLimit`，照常发 `flip.mp3` 这个 URL）——
+所以这条故障**只有 prod 那一轮**会现形，正是「dev 与 prod 各跑一次」这条规矩救的。
+
+**修法**（`vite.config.js`）：对音视频扩展名一律不内联，其余资源保持 Vite 默认。
+```js
+build: {
+  assetsInlineLimit: (filePath) =>
+    /\.(mp3|m4a|aac|ogg|oga|wav|flac|mp4|webm)$/i.test(filePath) ? false : undefined
+}
+```
+音频本来就该走独立文件（可单独缓存、可 Range、不进 JS 包）。
+
+> **通用教训**：「资源被下载了」这类判据会被**打包器的内联优化**静默击穿。
+> 而且触发条件是**素材尺寸跨过某个阈值**（4096）—— 换个更小的素材就会让它发生，
+> 跟「改了什么业务逻辑」毫无关系。**凡是判「某个文件被请求了」的断言，
+> 都要同时在 dev 与 prod 各跑一次**，因为内联/哈希/拍平这些都只发生在构建那一步。
+
+### 19.7 另一条操作教训：**探针在跑的时候不要往工程里写文件**
+
+`vite dev` 的 watcher 覆盖整个工程根目录。第一轮跑 8 个 flow 的时候，
+我在同一时间写了 `scripts/_append_r28.py`（以及改 `vite.config.js`），
+于是 dev server 触发了 **full-reload**，探针页面正在跑的 eval 被换掉 →
+`shot.mjs` 等不到结果，**卡死 5 分钟以上**（日志停在第一条 flow）。
+→ 规矩：**探针跑之前把所有文件写入做完**；跑的过程中不要动工程内的文件。
+（顺带印证了本项目一直强调的：这种卡死**不会报错**，只会「什么都不发生」。）
+
+### 19.8 交付方式的一条经验：**本地 HTML 直接预览会静默无声**
+
+候选页用相对路径引同目录的 mp3。用「直接预览 HTML 文件」的方式打开时，
+预览面板**只发 HTML、不同目录下的 mp3** → 实测 `flip--s2-50.mp3` 返回 **404**，
+页面看起来完全正常（播放器在、按钮在、数字在）但**一点声音都没有**。
+→ 正确做法：起一个支持 Range 的本地静态服务（`audio-asset-qa` 技能里的 `serve_range.py`）
+并绑定到 `audio-src/candidates/`，把 **localhost URL** 交给预览面板。
+已实测：7 个文件全 200、Range 请求返回 `206`（能拖进度条）。
