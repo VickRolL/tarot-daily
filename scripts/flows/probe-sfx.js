@@ -174,12 +174,26 @@ out.sfxStateAfterPreload = window.__tarotSfx
     }
   : null
 
-/* sfx 素材到底下没下到（只看 /sfx/ 路径的 mp3，别把 ambient 的算进来） */
-const sfxHits = fetches.filter((f) => /\/sfx\/[^/]+\.mp3(\?|$)/i.test(f.url))
-out.sfxFetches = sfxHits.map((f) => ({ url: f.url.split('/').pop(), status: f.status }))
-const nAssets = window.__tarotSfx ? window.__tarotSfx.assets.length : 0
+/* sfx 素材到底下没下到。
+   ⚠️ 判据按**文件名**匹配，不按路径段。第一版写的是「URL 里有 `/sfx/`」——
+      那是 **dev 的 URL 形状**（`/src/assets/audio/sfx/charge.mp3`）。生产构建里
+      Vite 会把资源**拍平**成 `/assets/charge-BkITS-5R.mp3`，于是这条判据在生产上
+      一次 fetch 都匹配不到 → 永远红；而它在 dev 上绿得毫无理由，
+      只是因为 dev 的目录恰好叫 `sfx`。
+      ★ 「只在某一条实现路径上成立的门槛不能套到另一条路径」——同一个坑，
+        这次踩的是 **URL 形状**（前两次是「振荡器 vs 缓冲区」「素材 vs 合成」）。
+      按文件名匹配则 dev / prod 通用：dev 是 `charge.mp3`、prod 是 `charge-<hash>.mp3`，
+      都 startsWith('charge')。（ambient 的 `ambient-loop-*.mp3` 不会误入，
+      因为它不以四个合同名开头。） */
+const assetNames = window.__tarotSfx ? window.__tarotSfx.assets : []
+const nAssets = assetNames.length
+const baseName = (u) => (u.split('?')[0].split('/').pop() || '')
+const sfxHits = fetches.filter(
+  (f) => /\.mp3$/i.test(baseName(f.url)) && assetNames.some((n) => baseName(f.url).startsWith(n))
+)
+out.sfxFetches = sfxHits.map((f) => ({ url: baseName(f.url), status: f.status }))
 out.PASS_sfxDownload =
-  sfxHits.length >= nAssets && sfxHits.every((f) => f.status === 200)
+  nAssets > 0 && sfxHits.length >= nAssets && sfxHits.every((f) => f.status === 200)
 
 /* 开关不能被别的层盖住（命中测试，不是 offsetParent） */
 const br = btn.getBoundingClientRect()
@@ -234,9 +248,9 @@ out.PASS_nodes = dBufStarted >= 1 || dOscStarted >= 1
 await sleep(600)
 const sfxKinds = window.__tarotSfx ? window.__tarotSfx.kinds : null
 out.sfxKinds = sfxKinds
-const assetNames = window.__tarotSfx ? window.__tarotSfx.assets : []
+/* assetNames / nAssets 已在 ②·五 段声明（按文件名匹配那次改动里提前了），此处不再重复 */
 out.PASS_sfxAssetPath =
-  assetNames.length > 0 &&
+  nAssets > 0 &&
   !!sfxKinds &&
   assetNames.every((n) => sfxKinds[n] === 'asset')
 out.PASS_sfxSynthFallback =
@@ -244,6 +258,36 @@ out.PASS_sfxSynthFallback =
   ['charge', 'burst', 'flip', 'reveal']
     .filter((n) => !assetNames.includes(n))
     .every((n) => sfxKinds[n] === 'synth')
+
+/* ── ②·七 出厂素材的响度 / 峰值 / 时长（第二十五轮新增）──────────────────
+   上面那两条只能证明「路走对了」，证明不了「路上运的那批货是对的」。
+   四个音来自**四次独立生成**，响度差开了就是「有的音听不见、有的音吓人」
+   （README 里那条契约）。它的端到端判据只能落在这里 ——
+   量的对象是**浏览器解码后的样本**：生成 → build-sfx.py → dist 哈希产物 →
+   HTTP → decodeAudioData，整条链路在这个点上才合拢。
+
+   三面的阈值都是**先量、后定**（实测值见 `scripts/out/_sfx_build.json` 的 rt_* 列），
+   不是拍出来的：
+     · 响度极差 ≤ 3dB —— 实测 1.1dB（charge -14.7 / burst -13.6 / flip -14.5 / reveal -14.7）
+     · 解码峰值 ≤ 0dBFS —— mp3 的样本间过冲会在这里显形，超了播放端就硬削
+     · 时长 ±0.12s 内对得上合同表 —— 专抓「dist 里是上一版旧文件」这类静默错配 */
+const CONTRACT_DUR = { charge: 1.0, burst: 1.0, flip: 0.82, reveal: 4.0 }
+const sfxStats = window.__tarotSfx ? window.__tarotSfx.stats : null
+out.sfxStats = sfxStats
+const sNames = Object.keys(sfxStats || {})
+const rmsVals = sNames.map((n) => sfxStats[n].rmsDb)
+out.sfxRmsSpreadDb = rmsVals.length
+  ? Math.round((Math.max(...rmsVals) - Math.min(...rmsVals)) * 10) / 10
+  : null
+/* 四件套必须一件不少：任何一件没解出来（failed）都是失败，缺件不能算"对齐" */
+out.PASS_sfxLoudness =
+  sNames.length === nAssets && out.sfxRmsSpreadDb !== null && out.sfxRmsSpreadDb <= 3.0
+out.sfxPeakOver = sNames.filter((n) => sfxStats[n].peakDb > 0.0)
+out.PASS_sfxNoOver = sNames.length > 0 && out.sfxPeakOver.length === 0
+out.sfxDurDrift = sNames
+  .filter((n) => Math.abs(sfxStats[n].dur - CONTRACT_DUR[n]) > 0.12)
+  .map((n) => `${n} ${sfxStats[n].dur}s vs 合同 ${CONTRACT_DUR[n]}s`)
+out.PASS_sfxDuration = sNames.length === nAssets && out.sfxDurDrift.length === 0
 
 /* 抽完牌：开关必须还露在解读面板之上（它固定，面板 z-index 50）*/
 out.panelUp = !!$('.panel')
@@ -275,6 +319,9 @@ out.PASS = {
   sfxDownload: out.PASS_sfxDownload,
   sfxAssetPath: out.PASS_sfxAssetPath,
   sfxSynthFallback: out.PASS_sfxSynthFallback,
+  sfxLoudness: out.PASS_sfxLoudness,
+  sfxNoClip: out.PASS_sfxNoOver,
+  sfxDuration: out.PASS_sfxDuration,
   nodesConnected: out.PASS_nodes,
   toggleAlwaysClickable: out.toggleHitIsSelf && out.toggleHitAfterPanel,
   orbStillHittable: out.orbHittable === 'orb',

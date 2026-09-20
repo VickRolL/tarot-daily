@@ -31,13 +31,17 @@
  *        · `file://` 打开时 fetch 被 CORS 挡掉 → 自动退回它；
  *        · 素材解码失败的兜底。
  *
- *   ⚠️ 两条铁律（都从 ambient 那边的事故里学来的）：
+ *   ⚠️ 三条铁律（前两条从 ambient 那边的事故里学来，第三条是自己踩的）：
  *     · **素材路失败是静默的** —— 页面照样有声音、控制台照样干净。
  *       所以有 `sfxSourceKind()` 与 `window.__tarotSfx`，探针靠它们断言
  *       「有素材的音必须走 asset、没素材的必须走 synth」，缺一不可。
  *     · **预载必须赶在第一声之前** —— 第一声是 charge，发生在抽牌点击里。
  *       靠 play 时才 fetch+decode 根本来不及。所以 `engine.unlock()` 会在
  *       手势栈里同步派发 `tarot:audio-ready`，这里监听后立刻开始预载。
+ *     · **「走了素材路」不等于「素材本身是对的」** —— 上一条只能证明路通了，
+ *       证明不了解码出来的响度/峰值/时长还是对齐的那一批
+ *       （dist 里躺着上一版旧文件就是这么静默发生的）。
+ *       所以 `__tarotSfx.stats` 在解码回调里**实测**每个音，供探针做端到端判据。
  *
  * ── 四个音的合成配方（兜底路，原第二十三轮）─────────────────────────
  *   ① charge 「屏息」  55 / 55.35Hz 双失谐 drone（**不扫频**）+ 两层气声缓慢拱起
@@ -89,9 +93,43 @@ for (const [path, url] of Object.entries(assetUrls)) {
 
 const buffers = {}
 const failed = {}
+const stats = {}
 let loadStarted = false
 /** 每个音最近一次实际走的路（'asset' | 'synth'），供探针断言 */
 const lastKind = {}
+
+const toDb = (x) => (x > 0 ? 20 * Math.log10(x) : -999)
+const round1 = (x) => Math.round(x * 10) / 10
+
+/**
+ * 量**页面真正解码出来的那一份**（不是仓库里的源文件，也不是构建报告里的 PCM）。
+ *
+ * 为什么值得在客户端算一遍：这条链路上游每一环都有自己的校验（生成契约、
+ * `build-sfx.py` 的自检、vite 的哈希产物），但它们都答不了同一个问题 ——
+ * 「**出厂后被浏览器解出来的这一份，到底还是不是对齐的那批**」。
+ * 生成 → 修剪归一 → 构建 → HTTP → `decodeAudioData`，整条链路只在这里合拢，
+ * 也只有在这里能抓到「dist 里躺着上一版的旧文件」这类静默错配。
+ *
+ * 结果缓存：`window.__tarotSfx` 是个 getter，探针的 waitFor 会轮询读它，
+ * 放进去现算会让同一段 4 秒音频被反复扫几十遍。
+ */
+function measure(buf) {
+  const ch = buf.getChannelData(0) /* 四个素材都是单声道（build-sfx.py 保证） */
+  if (!ch.length) return { dur: 0, rmsDb: -999, peakDb: -999 }
+  let sum = 0
+  let peak = 0
+  for (let i = 0; i < ch.length; i += 1) {
+    const v = ch[i]
+    sum += v * v
+    const a = v < 0 ? -v : v
+    if (a > peak) peak = a
+  }
+  return {
+    dur: Math.round(buf.duration * 1000) / 1000,
+    rmsDb: round1(toDb(Math.sqrt(sum / ch.length))),
+    peakDb: round1(toDb(peak))
+  }
+}
 
 /** 预载全部素材。幂等；单项失败只标记那一个，不拖累其它 */
 function loadAssets(c) {
@@ -102,7 +140,9 @@ function loadAssets(c) {
       try {
         const res = await fetch(url)
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        buffers[name] = await c.decodeAudioData(await res.arrayBuffer())
+        const buf = await c.decodeAudioData(await res.arrayBuffer())
+        buffers[name] = buf
+        stats[name] = measure(buf)
       } catch {
         failed[name] = true
       }
@@ -139,7 +179,8 @@ if (typeof window !== 'undefined') {
       assets: Object.keys(ASSETS),
       loaded: Object.keys(buffers),
       failed: { ...failed },
-      kinds: { ...lastKind }
+      kinds: { ...lastKind },
+      stats: { ...stats }
     })
   })
   /* engine.unlock() 在手势栈里派发（见 engine.js），这里开始预载 */

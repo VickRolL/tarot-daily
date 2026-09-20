@@ -19,7 +19,8 @@ aisounds.cn（ElevenLabs 引擎）产出的素材有三个通病，逐个有对�
      判据用**质心**：滤波后质心必须显著上移，否则视为「救失败」仍报 FAIL。
 
   ③ **响度不一**：四段素材 RMS 各不相同，直接播会一段炸一段听不见。
-     → RMS 归一到各自目标（-14 dBFS 附近），峰值顶到天花板（见 PEAK_CEILING_DB）。
+     → RMS 归一到各自目标（设计值 -14 dBFS 档，实际下发值见 TARGET_SHIFT_DB），
+       峰值顶到天花板（见 PEAK_CEILING_DB）。
 
     这一步 2026-09-20 推翻重做过一次，教训值得留着：
       · **峰值受限时，RMS 有数学上界**。flip 是「很轻的床体 + 一记 6ms 爆裂」，
@@ -73,7 +74,8 @@ except ImportError:
 #   target   成品目标时长（秒）：比 site 里实际用的略长或相等，超了截断
 #   hpf      高通转折频率（Hz）；None 不滤。charge 的 102Hz 泥需要 240
 #   passes   一阶 HPF 级联次数（2 = 12dB/oct）
-#   rms      归一目标（dBFS）
+#   rms      归一目标（dBFS，**设计值**）。真正下发给流水线的是它 + TARGET_SHIFT_DB
+#            —— 那个偏移是留给 mp3 编码过冲的余量，见 PEAK_CEILING_DB 的说明。
 #   fade_out 末尾淡出（秒）：截断处 / 自然结尾都用它防「咔」
 #   rescue   **是否强制「救泥判据」**。只有 charge 需要（原始素材质心 97Hz、
 #            低频占比 0.94，是真的泥）。burst/flip/reveal 本来就是亮音，
@@ -108,12 +110,43 @@ REPORT = os.path.join('scripts', 'out', '_sfx_build.json')
 
 SR = 44100
 
-# 峰值天花板（dBFS）。**这是免费余量，别浪费**：
-#   写 -1.5 是「给 mp3 编码器留足余量」的老习惯，但本站总线增益
-#   `MASTER_GAIN = 0.34`（engine.js，-9.4dB），素材峰值到 +1dBFS 也不会削波。
-#   天花板每抬 1dB，限幅要付出的响度代价就少 1dB —— charge/burst/reveal 都因此直接达标。
-#   -0.3 仍给编码器留了 0.3dB（mp3 解码会有少量 inter-sample 过冲）。
-PEAK_CEILING_DB = -0.3
+# 峰值天花板（dBFS）= **留给 mp3 编码器的余量**（2026-09-20 第二十五轮重新量化）。
+#
+# 曾经写 -0.3，理由是一句**没量过的假设**：「mp3 解码只有少量 inter-sample 过冲，
+# 0.3dB 够了」。实测把这个假设推翻了 —— 编码前峰值 -0.3dBFS 的素材，
+# 浏览器解码后有 +1.0dB 的过冲（burst 解码峰值 **+0.7dBFS**、flip +0.3dBFS），
+# 也就是**出厂文件是过满刻度的**。过冲量随内容变化（reveal 同一电平却没冲），
+# 所以只能按最坏情况留余量，不能按平均。
+#
+# ⚠️ 这件事在 python 侧**看不见**：miniaudio 的解码输出被钳在 ±1.0
+#    （burst 有 6 个样本精确落在 1.000000、s16 路径有 4 个撞到 32767），
+#    所以原来那条「解码峰值 > 0dBFS」判据是**死判据**，永远绿。
+#    → 改成了「不许出现被钳样本」这个指纹判据（见 build_one 的回读段），
+#      真正量到过冲的是浏览器：`scripts/flows/probe-sfx.js` 的 sfxNoClip。
+#
+# 2.8 = 实测最大过冲（burst +1.2dB、flip +1.7dB，都是编码前的 PCM 峰值 → 解码峰值）
+# 留 1.1dB 余量。**余量必须真的留够，不能卡着零点过**：第一版按 -1.8 重建后
+# flip 正好落在 0.0dBFS —— python 的解码器报 -0.1、Chrome 报 0.0，同一条音两边
+# 差 0.1dB，判据会随机变红。而且 BGM 那条流水线从一开始用的就是 **-3dBFS**
+# （build-ambient.py 的 target_peak，注释写「留出编码器的余量，避免削顶」）——
+# 音效这边才是那个异类，向 BGM 看齐即可。
+#
+# 总线增益 MASTER_GAIN=0.34（-9.4dB）依然兜得住（-2.8dBFS 到总线上只剩 -12.2dBFS），
+# 所以这只是**交付卫生**问题，不是可听故障 —— 但交付出去的文件不该过满刻度，
+# 那是一条独立的标准。
+PEAK_CEILING_DB = -2.8
+
+# 因为天花板下移了，四个音的 rms 目标**必须同步下移同样的量**：
+# 这样「峰值到天花板的距离」「限幅器压多少」「软削顶削多少」**逐位不变**，
+# 四个音的相对对齐关系与各自的动态一点没动，只是整体轻 2.5dB。
+# 反过来若只降天花板不动目标，限幅器会多压 2.5dB → 有 headroom 的 charge
+# 不受影响、顶着天花板的 burst/flip/reveal 被压低 → **相对对齐被破坏**，
+# 正是这个脚本要修的那类故障。
+# 证据：整体下移后 flip 的软削顶电平从 -5.5 → -7.0dBFS，正好差 1.5dB，
+# 被削样本比例 **1.44% 一模一样** —— 几何逐位保持。
+# 绝对电平轻 2.5dB 在听感上不可辨（要辨也是相对 BGM 的关系，而 BGM 在
+# 仪式中会被 duck 到 6.3%，音效仍高出 30dB 以上）。
+TARGET_SHIFT_DB = -2.5
 
 
 def db(x):
@@ -380,11 +413,13 @@ def build_one(name, spec, kbps):
         a = highpass(a, spec['hpf'], spec['passes'])
     a = trim_silence(a)
     a = fit_duration(a, spec['target'], spec['fade_out'])
-    norm = normalize(a, spec['rms'], allow_softclip=spec.get('clip', False))
+    # 见 TARGET_SHIFT_DB 的说明：目标是「设计值 + 编码余量偏移」，只在这一处算
+    rms_target = spec['rms'] + TARGET_SHIFT_DB
+    norm = normalize(a, rms_target, allow_softclip=spec.get('clip', False))
     a = norm['y']
     # 峰值系数（限幅前）= 归一后的峰值 - 目标 RMS。>18dB 说明有孤立尖峰，
     # 这一步的数字是「限幅器/削顶器到底有没有在干活」的唯一证据。
-    crest_db = norm['pre_peak_db'] - spec['rms']
+    crest_db = norm['pre_peak_db'] - rms_target
 
     size = encode_mp3(a, kbps, out)
     out_centroid, out_low = spectral_metrics(a)
@@ -404,6 +439,18 @@ def build_one(name, spec, kbps):
     rt_rms = db(_rms(rt))
     rt_peak = db(float(np.abs(rt_raw).max())) if len(rt_raw) else -999.0
     rt_dur = len(rt_raw) / SR
+
+    # ⚠️ **被钳样本数**：miniaudio 的解码输出被钳在 ±1.0，所以 `rt_peak` **永远
+    #    不可能 > 0**（第二十五轮实测：burst 有 6 个样本精确落在 1.000000、
+    #    s16 路径有 4 个撞到 32767）。也就是说「解码峰值 > 0dBFS」这条判据
+    #    在 python 侧是**死的**，写多少年都不会红 —— 而浏览器（不钳位）
+    #    同时报出 +0.7dBFS 的真实过冲。
+    #    → 改用**指纹判据**：连续音频里出现成片「精确的满刻度」不可能是巧合，
+    #      它是「编码前峰值已经顶到天花板、过冲被截断」的签名。这条会红。
+    #      真正量得出过冲幅度的仍是浏览器探针（probe-sfx 的 sfxNoClip）。
+    #      复现这份证据的诊断脚本：`scripts/_probe_mp3peak.py`
+    #      （打印「精确落在 ±1.0 的样本数」，那是钳位的指纹）。
+    pinned = int(np.sum(np.abs(rt_raw) >= 0.9999995))
 
     # 「救泥」判据按素材分组（见 SPECS.rescue 的说明）：
     #   rescue=True  原始是泥 → 必须**真的被救上来**（质心 ≥1.5 倍 且 低频占比 <0.6）
@@ -433,8 +480,10 @@ def build_one(name, spec, kbps):
         'soft_frac': round(norm['soft_frac'], 4),
         'out_peak_db': round(db(float(np.abs(a).max())), 1),
         'out_rms_db': round(db(float(np.sqrt(np.mean(a ** 2)))), 1),
+        'rms_target_db': round(rms_target, 1),
         'rt_dur': round(rt_dur, 3),
         'rt_peak_db': round(rt_peak, 1),
+        'rt_pinned': pinned,
         'rt_rms_db': round(rt_rms, 1),
         'raw_centroid_hz': round(raw_centroid, 0),
         'out_centroid_hz': round(out_centroid, 0),
@@ -484,7 +533,7 @@ def main():
         print(
             f"   峰值系数 {r['out_crest_db']:.1f}dB（限幅前峰值 {r['pre_limit_peak_db']:.1f}dBFS）  "
             f"→ RMS {r['out_rms_db']:.1f}dB / 峰值 {r['out_peak_db']:.1f}dB  "
-            f"偏离目标 {abs(r['out_rms_db'] - spec['rms']):.1f}dB"
+            f"偏离目标 {abs(r['out_rms_db'] - r.get('rms_target_db', spec['rms'])):.1f}dB"
         )
         if r['path'] == 'softclip':
             print(
@@ -516,7 +565,12 @@ def main():
     def loud_db(r):
         return r.get('rt_rms_db', r['out_rms_db'])
 
-    devs = [(r['name'], round(abs(loud_db(r) - SPECS[r['name']]['rms']), 1)) for r in results]
+    def target_db(r):
+        # 有效目标 = 设计值 + 编码余量偏移。写成函数而不是就地展开，
+        # 是为了让「基线偏移」只有 TARGET_SHIFT_DB 一个来源。
+        return r.get('rms_target_db', SPECS[r['name']]['rms'] + TARGET_SHIFT_DB)
+
+    devs = [(r['name'], round(abs(loud_db(r) - target_db(r)), 1)) for r in results]
     loud_fail = [n for n, d in devs if d > 1.0]
     print('响度偏离目标（解码后）：' + '  '.join(f'{n} {d}dB' for n, d in devs))
     if loud_fail:
@@ -536,15 +590,19 @@ def main():
 
     # ── 回读验收：mp3 解码后必须仍满足「不越界、时长不变、编码别乱来」──
     # 判据落在 mp3 上（页面实际拿到的就是它）。三条都双向可判：
-    #   ① 峰值 > 0dBFS → mp3 解码过冲，播放端会硬削 → 失败
+    #   ① 解码结果里**出现被钳在满刻度的样本** → 编码前峰值顶到了天花板 → 失败
+    #      （不是写「rt_peak > 0dBFS」—— 那条在 python 侧是死判据，见 build_one 的说明）
     #   ② 解码 RMS 与编码前差 > 1.0dB → 编码把响度改了（正常 0.4~0.7dB）→ 失败
     #   ③ 解码时长比 PCM 短 / 长出 0.1s 以上 → 编码器丢了或补了料 → 失败
     rt_fail = []
     for r in results:
-        if 'rt_peak_db' not in r:
+        if 'rt_pinned' not in r:
             continue  # 旧报告，本轮没重跑的项
-        if r['rt_peak_db'] > 0.0:
-            rt_fail.append(f"{r['name']} mp3 解码峰值 {r['rt_peak_db']}dB > 0（会硬削）")
+        if r['rt_pinned']:
+            rt_fail.append(
+                f"{r['name']} mp3 解码有 {r['rt_pinned']} 个样本被钳在满刻度"
+                f"（编码前峰值顶到了天花板 {PEAK_CEILING_DB}dBFS，过冲被截断）"
+            )
         shift = abs(r['rt_rms_db'] - r['out_rms_db'])
         if shift > 1.0:
             rt_fail.append(
