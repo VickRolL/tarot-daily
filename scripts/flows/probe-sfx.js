@@ -70,6 +70,27 @@ out.toggle = btn
 out.PASS_initOff = !!btn && btn.getAttribute('aria-pressed') === 'false' && localStorage.getItem('tarot.sound') !== 'on'
 
 /* ── 装钩子：必须在第一次点击之前 ────────────────────────────────── */
+
+/** 记录每一次 fetch（第二十五轮新增：断言 sfx 素材真的下到了、下的是 200） */
+const fetches = []
+const origFetch = window.fetch
+window.fetch = function (input, init) {
+  const url = typeof input === 'string' ? input : (input && input.url) || ''
+  const rec = { url, status: null }
+  fetches.push(rec)
+  return origFetch.call(this, input, init).then(
+    (res) => {
+      rec.status = res.status
+      return res
+    },
+    (err) => {
+      rec.status = 'REJECTED'
+      rec.err = String(err && err.message)
+      throw err
+    }
+  )
+}
+
 const Orig = window.AudioContext || window.webkitAudioContext
 out.hasAudioContextAPI = !!Orig
 const made = []
@@ -125,6 +146,31 @@ out.afterClick = {
 out.PASS_engineStart = made.length === 1 && made[0]?.state === 'running' && count.gain >= 1
 out.PASS_persisted = btn.getAttribute('aria-pressed') === 'true' && localStorage.getItem('tarot.sound') === 'on'
 
+/* ── ②·五 素材预载（第二十五轮新增）──────────────────────────────────
+   点开关的那一刻 unlock() 会派发 tarot:audio-ready → sfx 开始 fetch+decode。
+   必须等它完成再抽牌：否则第一声 charge 播的时候缓冲还没好，
+   会悄悄走合成路 —— 探针若不在这里等齐，「素材优先」就成了永假的绿灯。
+   终止条件：loaded + failed === assets（每一个都见到结果，成功或失败都算）。 */
+out.sfxPreloadMs = await waitFor(() => {
+  const s = window.__tarotSfx
+  if (!s) return false
+  return s.loaded.length + Object.keys(s.failed).length >= s.assets.length
+}, 5000)
+out.sfxStateAfterPreload = window.__tarotSfx
+  ? {
+      assets: window.__tarotSfx.assets,
+      loaded: window.__tarotSfx.loaded,
+      failed: window.__tarotSfx.failed
+    }
+  : null
+
+/* sfx 素材到底下没下到（只看 /sfx/ 路径的 mp3，别把 ambient 的算进来） */
+const sfxHits = fetches.filter((f) => /\/sfx\/[^/]+\.mp3(\?|$)/i.test(f.url))
+out.sfxFetches = sfxHits.map((f) => ({ url: f.url.split('/').pop(), status: f.status }))
+const nAssets = window.__tarotSfx ? window.__tarotSfx.assets.length : 0
+out.PASS_sfxDownload =
+  sfxHits.length >= nAssets && sfxHits.every((f) => f.status === 200)
+
 /* 开关不能被别的层盖住（命中测试，不是 offsetParent） */
 const br = btn.getBoundingClientRect()
 const hitAt = (el) => {
@@ -160,6 +206,26 @@ out.nodesDuringRitual = {
 }
 out.PASS_nodes = count.osc > nBefore.osc && count.buf > nBefore.buf && count.started > 0
 
+/* ── ②·六 每个音走的哪条路（第二十五轮新增）──────────────────────────
+   四个音在整场仪式里都会响（charge→burst→flip→reveal）。
+   断言是**双向**的（判据写错一面就永远是绿的）：
+     · 有素材的音必须 kind === 'asset'（素材路没生效 = 静默回归，最阴）；
+     · 没素材的音必须 kind === 'synth'（说明兜底路也还活着，
+       且 kinds 确实在按音记录——防止这张表本身坏了还全绿）。 */
+await sleep(600)
+const sfxKinds = window.__tarotSfx ? window.__tarotSfx.kinds : null
+out.sfxKinds = sfxKinds
+const assetNames = window.__tarotSfx ? window.__tarotSfx.assets : []
+out.PASS_sfxAssetPath =
+  assetNames.length > 0 &&
+  !!sfxKinds &&
+  assetNames.every((n) => sfxKinds[n] === 'asset')
+out.PASS_sfxSynthFallback =
+  !!sfxKinds &&
+  ['charge', 'burst', 'flip', 'reveal']
+    .filter((n) => !assetNames.includes(n))
+    .every((n) => sfxKinds[n] === 'synth')
+
 /* 抽完牌：开关必须还露在解读面板之上（它固定，面板 z-index 50）*/
 out.panelUp = !!$('.panel')
 out.toggleHitAfterPanel = hitAt(btn)
@@ -187,6 +253,9 @@ out.PASS = {
   initOff: out.PASS_initOff,
   persisted: out.PASS_persisted,
   engineStart: out.PASS_engineStart,
+  sfxDownload: out.PASS_sfxDownload,
+  sfxAssetPath: out.PASS_sfxAssetPath,
+  sfxSynthFallback: out.PASS_sfxSynthFallback,
   nodesConnected: out.PASS_nodes,
   toggleAlwaysClickable: out.toggleHitIsSelf && out.toggleHitAfterPanel,
   orbStillHittable: out.orbHittable === 'orb',

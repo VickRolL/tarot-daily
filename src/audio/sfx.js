@@ -1,5 +1,5 @@
 /**
- * 音效（2026-09-20 第二十三轮 · 全部重新设计）
+ * 音效（2026-09-20 第二十三轮全重设计 · 第二十五轮改为「素材优先、合成兜底」）
  * ==========================================================================
  * 第二十二轮的四个音被用户逐个否掉了，原话：
  *   「点击之后牌出来前的声音和汽车加速的音效很像」
@@ -22,7 +22,24 @@
  * 干声贴着耳朵，像玩具。所以这一版所有音都经 `send(..., wet)` 送进
  * `engine.js` 里程序生成的厅堂混响，让声音有地方待着。
  *
- * ── 四个音现在的配方 ────────────────────────────────────────────────
+ * ── 第二十五轮：AI 生成素材优先（与 ambient.js 同一套双路结构）──────
+ *   合成配方再讲究也是**数学**，AI 素材是**录音**——后者天然更「真」。
+ *   ① **素材路**：`src/assets/audio/sfx/<name>.mp3`，由 aisounds.cn 生成、
+ *      `scripts/build-sfx.py` 修剪对齐归一（build 报告见 `scripts/out/_sfx_build.json`）。
+ *   ② **合成路**：下面的四个配方**一个字没删**，它承担：
+ *        · 素材还没到货的那几个音（限流分批生成，到一段处理一段）；
+ *        · `file://` 打开时 fetch 被 CORS 挡掉 → 自动退回它；
+ *        · 素材解码失败的兜底。
+ *
+ *   ⚠️ 两条铁律（都从 ambient 那边的事故里学来的）：
+ *     · **素材路失败是静默的** —— 页面照样有声音、控制台照样干净。
+ *       所以有 `sfxSourceKind()` 与 `window.__tarotSfx`，探针靠它们断言
+ *       「有素材的音必须走 asset、没素材的必须走 synth」，缺一不可。
+ *     · **预载必须赶在第一声之前** —— 第一声是 charge，发生在抽牌点击里。
+ *       靠 play 时才 fetch+decode 根本来不及。所以 `engine.unlock()` 会在
+ *       手势栈里同步派发 `tarot:audio-ready`，这里监听后立刻开始预载。
+ *
+ * ── 四个音的合成配方（兜底路，原第二十三轮）─────────────────────────
  *   ① charge 「屏息」  55 / 55.35Hz 双失谐 drone（**不扫频**）+ 两层气声缓慢拱起
  *                     靠**音量拱形**表达积蓄，不靠升调 —— 升调就是加速
  *   ② burst  「雾散」  高通气声 + 低频气层 + 一声极轻的低音底座
@@ -33,7 +50,7 @@
  *                     attack 放宽到 180ms，余韵 6s —— 是「嗡起来」不是「叮一下」
  */
 
-import { air, audio, isSoundOn, tone } from './engine'
+import { air, audio, isSoundOn, send, tone } from './engine'
 
 /* ⚠️ 转发导出必须显式写出每个名字，而且**只能走 `export ... from`**。
    踩过一次：先在 `import` 里漏了 `muteAll`、却在 `export { muteAll }` 里写了它，
@@ -42,28 +59,107 @@ import { air, audio, isSoundOn, tone } from './engine'
    `export ... from` 不创建局部绑定，所以和上面那个 `import` 同名也不会冲突。 */
 export { isSoundOn, muteAll, readSoundPref, setSoundOn, unlock, unmuteAll } from './engine'
 
+/* ---------------------------------------------------------------- 素材层 */
+
+/**
+ * Vite 会把 glob 命中的文件全部打进构建，**目录为空/缺某个文件都不报错** ——
+ * 正好匹配「素材分批到货」的现状：到货一个，glob 多一个键，无需改代码。
+ */
+const assetUrls = import.meta.glob('../assets/audio/sfx/*.mp3', {
+  query: '?url',
+  import: 'default',
+  eager: true
+})
+
+/** 素材增益配平（与 build-sfx.py 报告里的 trim 一致）。charge 被高通削了电平，靠它补回 */
+const TRIMS = { charge: 1.4, burst: 1.0, flip: 1.0, reveal: 1.0 }
+
+/** 只认四个合同内的名字——目录里混进别的文件不生效 */
+const ASSETS = {}
+for (const [path, url] of Object.entries(assetUrls)) {
+  const name = path.replace(/^.*\//, '').replace(/\.mp3$/, '')
+  if (name in TRIMS) ASSETS[name] = url
+}
+
+const buffers = {}
+const failed = {}
+let loadStarted = false
+/** 每个音最近一次实际走的路（'asset' | 'synth'），供探针断言 */
+const lastKind = {}
+
+/** 预载全部素材。幂等；单项失败只标记那一个，不拖累其它 */
+function loadAssets(c) {
+  if (loadStarted) return
+  loadStarted = true
+  for (const [name, url] of Object.entries(ASSETS)) {
+    ;(async () => {
+      try {
+        const res = await fetch(url)
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        buffers[name] = await c.decodeAudioData(await res.arrayBuffer())
+      } catch {
+        failed[name] = true
+      }
+    })()
+  }
+}
+
+/** 播素材。没有解码好的缓冲就返回 false（调用方退回合成） */
+function playAsset(c, name) {
+  const buf = buffers[name]
+  if (!buf) return false
+  const src = c.createBufferSource()
+  src.buffer = buf
+  const g = c.createGain()
+  g.gain.value = TRIMS[name] ?? 1
+  src.connect(g)
+  /* 素材自带空间感，混响只给一点点（0.12），主要作用是把它「焊」进同一间厅堂 */
+  send(c, g, 0.12, 1)
+  src.start()
+  lastKind[name] = 'asset'
+  return true
+}
+
+/** 探针用：哪些音有素材 */
+export const availableSfxAssets = () => Object.keys(ASSETS)
+/** 探针用：每个音最近一次走的路 */
+export const sfxSourceKind = () => ({ ...lastKind })
+
+/* 无头探针进不了模块内部，把状态挂到 window 上（只读，探针专用） */
+if (typeof window !== 'undefined') {
+  Object.defineProperty(window, '__tarotSfx', {
+    configurable: true,
+    get: () => ({
+      assets: Object.keys(ASSETS),
+      loaded: Object.keys(buffers),
+      failed: { ...failed },
+      kinds: { ...lastKind }
+    })
+  })
+  /* engine.unlock() 在手势栈里派发（见 engine.js），这里开始预载 */
+  window.addEventListener('tarot:audio-ready', () => {
+    const c = audio()
+    if (c) loadAssets(c)
+  })
+}
+
 /* ---------------------------------------------------------------- 四个音 */
 
 /**
  * ① 蓄势「屏息」—— 对应「点击 → 牌还没出来」那一段（长度 = 节拍表的 chargeDone）。
  *
- * 用户说上一版「像汽车加速」。根因是两条**上行扫频**：96→148Hz 的主音、
- * 193→291Hz 的陪音，再叠一个低通 260→900Hz 的开口 —— 这一整套正好是
- * 引擎从怠速拉转速的声音画像。
- *
- * 现在改成**频率一个都不动**：
- *   · 两个只差 0.35Hz 的低音（55 / 55.35）叠出**缓慢拍频**（约 0.35 次/秒），
- *     听感是「隐隐地起伏」，这是「活着、在攒劲」的来源 —— 比扫频高级得多；
- *   · 两层气声（中频 480Hz / 高频 6.5kHz）从几乎听不见慢慢浮上来，
- *     像是**有人在远处吸气**；
- *   · 全程只有音量在动，没有音高在动。所以它不会再被读成任何机器。
- *
- * 长度直接取节拍表的 `chargeDone`：改动画时长，音效自动跟着对齐。
+ * 素材（aisounds 生成 + build-sfx.py 高通 240Hz 去泥）定长 1.0s；
+ * `durMs` 只在合成路里生效 —— 素材路以素材长度为准，
+ * 蓄势比动画略长半拍是可接受的（它本来就是「余息」）。
  */
 export function charge(durMs = 1000) {
   if (!isSoundOn()) return false
   const c = audio()
-  if (!c || durMs < 200) return false
+  if (!c) return false
+  loadAssets(c)
+  if (playAsset(c, 'charge')) return true
+  lastKind.charge = 'synth'
+  if (durMs < 200) return false
   const t0 = c.currentTime + 0.02
   const dur = durMs / 1000
 
@@ -117,6 +213,9 @@ export function burst() {
   if (!isSoundOn()) return false
   const c = audio()
   if (!c) return false
+  loadAssets(c)
+  if (playAsset(c, 'burst')) return true
+  lastKind.burst = 'synth'
   const t0 = c.currentTime + 0.005
 
   /* 主气声：散开。attack 45ms —— 低于 5ms 就会被听成「击」 */
@@ -174,6 +273,9 @@ export function flip() {
   if (!isSoundOn()) return false
   const c = audio()
   if (!c) return false
+  loadAssets(c)
+  if (playAsset(c, 'flip')) return true
+  lastKind.flip = 'synth'
   const t0 = c.currentTime + 0.005
 
   air(c, {
@@ -227,6 +329,9 @@ export function reveal() {
   if (!isSoundOn()) return false
   const c = audio()
   if (!c) return false
+  loadAssets(c)
+  if (playAsset(c, 'reveal')) return true
+  lastKind.reveal = 'synth'
   const t0 = c.currentTime + 0.015
 
   /* 基音 + 微微失谐的副基音（拍频约 0.8 次/秒） */

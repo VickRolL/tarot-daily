@@ -100,10 +100,19 @@ export function audio() {
 /**
  * 在用户手势里调一次：把 AudioContext 建出来并跑起来（不发声）。
  * 真正的创建时机有两个，都在手势里：① 用户点音效开关；② 用户点水晶球抽牌。
+ *
+ * 成功后同步派发 `tarot:audio-ready` —— 音效模块（sfx.js）监听它来**预载素材**。
+ * CustomEvent 是同步派发的：处理器跑在同一个手势调用栈里，所以它内部的
+ * `audio()` 依然符合规矩②。没有这个事件，素材只能等第一次 play 时才开始
+ * fetch+decode，那第一声（charge）必然错过素材、悄悄落回合成。
  */
 export function unlock() {
   const c = audio()
-  return !!c && c.state === 'running'
+  const ok = !!c && c.state === 'running'
+  if (ok && typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('tarot:audio-ready'))
+  }
+  return ok
 }
 
 /** 总线。BGM 与音效都挂在它下面，这样「整体音量」只有一个地方可调 */
