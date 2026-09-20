@@ -1508,4 +1508,64 @@ const assetUrls = import.meta.glob('../assets/audio/sfx/*.mp3', {
 被摇掉的只有 `DevBar`，图鉴本来就该在正式产物里。
 
 
+## 17 · 2026-09-21 第二十六轮：替换被否决的 charge / burst（ElevenLabs 通道）
+
+用户原话：「抽牌阶段的前两个音效还是不对劲……点击球的那个屏息听起来像雷云滚滚……
+雾散听起来就像电饭煲烧开了……修改的风格尽量要偏向于给人心情安定的那种感觉……
+可以用 ElevenLabs 来生成音效」。
+
+诊断与提示词重写见 §5dd87da / §b88db18 两条提交；本节只记**通道落地时踩的两个坑**。
+
+### 17.1 ⚠️ 端点：文档页名 ≠ REST 路径（会误判成 key 问题）
+
+| 写法 | 结果 |
+|---|---|
+| `POST /v1/text-to-sound-effects/convert` | **404** `{"detail":"Not Found"}` |
+| `POST /v1/sound-generation` | ✅ 正确（无 key 时回 401，可用来判定路径对不对） |
+
+混淆来源：官方文档**页面 URL** 是 `/docs/api-reference/text-to-sound-effects/convert`，
+Python SDK 的方法名也叫 `text_to_sound_effects.convert`，但**真实 REST 端点**是
+`/v1/sound-generation`（`eleven_text_to_sound_v2` 模型）。已修进 `gen-sfx-elevenlabs.py` 并加注释。
+
+> 排查手法可复用：拿 `-d '{}'` 空 body 打一次，**401 = 路径对（只是没鉴权）**，
+> **404 = 路径错**。这样不必烧额度就能定位端点。
+
+### 17.2 ★ 当前卡点：key 缺 `sound_generation` 权限
+
+用户给的 key（`sk_1684…58b9`）**本身有效**（`/v1/text-to-sound-effects/convert` 回 401、
+`/v1/user` 回 401 但原因是 `missing the permission user_read` —— 说明是**受限 key**），
+但打生成端点报：
+
+```
+HTTP 401  authentication_error / missing_permissions
+"The API key you used is missing the permission sound_generation to execute this operation."
+```
+
+**处置（需要用户在浏览器里操作，代码侧无法绕过）**：
+1. 打开 https://elevenlabs.io/app/settings/api-keys
+2. 编辑密钥 `sk_1684…58b9`（或新建一个），在权限勾选里**打开 Sound Effects**（即 `sound_generation`）
+   — 这个 key 显然是按最小权限建的，要逐项授权
+3. 存好后再跑：`python scripts/gen-sfx-elevenlabs.py --only charge burst`
+   （key 已写在 `.env.local`，脚本自动读，**无需再动任何配置**）
+
+顺带：如果把 `user` / `user_read` 也勾上，就能看到套餐与剩余额度（`/v1/user`）。
+**商用授权注意**：免费层（$0/月，10k credits）含 Sound Effects，但**商用授权要 Starter（$6/月）起**。
+
+### 17.3 网络：生成长请求偶发被掐断（已加重试）
+
+首次调用报 `SSL: UNEXPECTED_EOF_WHILE_READING`。实测同刻 `curl` 打同一域名是通的
+（空 body → 401，t=2.9s），所以不是墙、也不是 key —— 是**生成请求要跑十几秒、连接被中途掐断**。
+已在 `generate()` 里加 **3 次重试（2s/4s 退避）+ `Connection: close`**；
+401/402/403/422 这类**确定性**错误不重试，直接抛带处置建议的信息。
+
+### 17.4 待办（权限打开后照此续跑，无需再问）
+
+1. `python scripts/gen-sfx-elevenlabs.py --only charge burst`
+   — 生成即量指标，对着 `TARGETS` 报 PASS/FAIL（脚本已把判据前移到生成阶段）
+2. 全部 PASS → `python scripts/build-sfx.py --force` 裁齐 + 配平 + 接进站点
+   （旧 `_raw` 已备份到 `scripts/out/_raw-backup-20260921-003236/`，不满意可回退）
+3. `vite dev`（4188）→ DevBar 的「屏息 / 雾散」逐个试听，用户拍板
+4. 通过后跑 `probe-devbar-sfx` + `probe-sfx` 回归，再 `vite build` 出正式产物
+
+
 

@@ -18,8 +18,15 @@
 
 <https://elevenlabs.io/app/sound-effects>
 
-- **有官方 API**：`POST /v1/text-to-sound-effects/convert`，请求头 `xi-api-key`
-  → <https://elevenlabs.io/docs/api-reference/text-to-sound-effects/convert>
+- **有官方 API**：`POST /v1/sound-generation`，请求头 `xi-api-key`
+  → 文档：<https://elevenlabs.io/docs/api-reference/text-to-sound-effects/convert>
+  ⚠️ **端点别照抄文档页的 URL**：那一页的地址是 `…/text-to-sound-effects/convert`，
+  但**真实 REST 端点**是 `/v1/sound-generation`。照抄前者会得到 `404 {"detail":"Not Found"}`，
+  很容易反过来怀疑自己的 key。速判：空 body 打一次 —— **401 = 路径对，404 = 路径错**。
+- ⚠️ **key 要单独勾 Sound Effects 权限**：ElevenLabs 的按键权限可细到逐项，
+  只给 `text_to_speech` 之类的 key 打这个端点会得到
+  `401 missing the permission sound_generation`。去
+  <https://elevenlabs.io/app/settings/api-keys> 把 **Sound Effects** 勾上即可。
 - 关键参数：
   - `text` —— 提示词
   - `duration_seconds` —— **0.5 ~ 30，支持小数**（比 AiSounds 只能整数秒自由得多）

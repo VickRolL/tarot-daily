@@ -5,7 +5,8 @@
 > 未完成的工作看 **`NEXT_STEPS.md`**（含具体做法、优先级、成本与踩坑提醒）。
 > 每次有实质进展都要回来更新本文档的「当前阶段」与「变更日志」。
 
-最后更新：2026-09-20（第二十六轮：**用户否决 ① charge / ② burst 两个音**，正在换 ElevenLabs 重做）。
+最后更新：2026-09-21（第二十六轮：**用户否决 ① charge / ② burst 两个音**，换 ElevenLabs 重做 ——
+通道已打通到「只差 key 权限」这一步，详见 `NEXT_STEPS.md` §17）。
 
 > ### ⚠️ 音效现状：③ flip / ④ reveal 用户认可；① charge / ② burst **被否决、待替换**
 >
@@ -35,6 +36,13 @@
 > 就含 Sound Effects），并新增 `scripts/gen-sfx-elevenlabs.py`：
 > 生成后**立刻量指标对目标区间报 PASS/FAIL**，避免拿到手才发现又是个闷雷。
 > 该脚本的判据已做**反向验证**（旧的被否决素材全部触发 FAIL，flip/reveal 不受约束）。
+>
+> **★ 当前卡点（2026-09-21）：key 缺 `sound_generation` 权限。** 用户给的 key 已写入
+> `.env.local`（确认被 git 忽略），key 本身有效，但打生成端点报
+> `401 missing the permission sound_generation` —— 去
+> <https://elevenlabs.io/app/settings/api-keys> 打开密钥的 **Sound Effects** 勾选即可，
+> 代码侧无需改动。另：**端点别照抄文档页 URL**（`/v1/text-to-sound-effects/convert` 是文档页名，
+> 真实 REST 是 `/v1/sound-generation`，照抄得 404）。
 
 第二十五轮：**四个音效全部换成 AI 素材并接进站里**，同时修掉两条真故障。
 音效现在和 BGM 同一套结构：`sfx.js`「**素材优先、合成兜底**」，素材是
