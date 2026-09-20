@@ -59,10 +59,15 @@ JOBS = {
 不要上升的扫频音、不要咻的冲刺音、不要风啸、不要白噪声嘶声；
 不要气流的沙沙声（这一条要的是「低音」，不是「空气摩擦」）。""" + COMMON,
     },
-    # ② 雾散：1.5 秒。被否原因「像电饭煲烧开」——实测 84.5% 能量在 6-12kHz、质心 8718Hz。
+    # ② 雾散：**1.5 秒（契约值）**。被否原因「像电饭煲烧开」——实测 84.5% 能量在 6-12kHz、质心 8718Hz。
     #    新版要搬回中低频的柔和铺开感（目标质心 300~1200Hz），且要有厚度。
+    #    ⚠️ 2026-09-21 把这里从 1.2 改回 **1.5**：README 的契约表和 build-sfx.py 的
+    #       SPECS.target 都写 1.5，只有这里写 1.2 —— 三处不一致。旧 burst 之所以
+    #       只有 1.0s，是 **AiSounds 只支持整数秒** 的通道限制，不是契约。
+    #       ElevenLabs 支持小数秒，就该照契约来（节拍余量：burst@1000ms → flip@3700ms，
+    #       可用 2.7s，1.5s 安全）。
     'burst': {
-        'duration': 1.2,
+        'duration': 1.5,
         'prompt': """一声柔和的「雾气无声弥散」：像一层薄雾缓缓铺开又慢慢淡去，
 质地圆润、绵密、柔软，像很轻的丝绒拂过空气。
 
@@ -87,6 +92,13 @@ TARGETS = {
         'low_lt300': (0.40, 1.0),     # 旧 0.756 ✓够厚；下限防它跳到「没底子的空气声」
         'centroid_Hz': (150, 1500),   # 旧 105Hz 太暗；参照用户满意的 reveal 1701Hz
         'high_gt4000': (0.0, 0.20),   # 旧 0.004 ✓；设上限防它变成高频气流
+        # ★ 2026-09-21 补：**手势**也要卡。踩过的坑 ——
+        #   en-180/240/320 三条频谱全绿，但包络在结尾塌到 -22.5/-11.9/-9.1dB，
+        #   而节拍表里 burst 正好在 charge **结束那一刻**接上（at=1000ms）
+        #   → 蓄势蓄到一半自己先静了，两拍之间出现空档。
+        #   参照物是**旧 charge 的手势**（用户只否了音色、没否手势）：尾段 -2.6dB。
+        #   阈值取 -6：给参照物留 3.4dB 余量，同时把上面三条（≥9.1）判红。
+        'env_tail_db': (-6.0, 0.5),
     },
     'burst': {
         'centroid_Hz': (250, 3000),   # 旧 8600Hz ← 蒸汽
@@ -100,6 +112,9 @@ TARGETS = {
 # （SDK 里的方法名 still 叫 text_to_sound_effects.convert，这也是混淆的来源。）
 API = 'https://api.elevenlabs.io/v1/sound-generation'
 MODEL = 'eleven_text_to_sound_v2'
+# `text` 的硬上限，实测报 text_too_long（英文 803 字符被 400 拒）。
+# 客户端先拦一道，免得烧一次请求才发现。
+MAX_TEXT = 450
 RAW_DIR = os.path.join('audio-src', 'sfx', '_raw')
 
 
@@ -131,6 +146,14 @@ def generate(api_key, text, duration, influence, model=MODEL, timeout=120, retri
     401/402/403/422 这类**确定性**错误不重试，直接给出针对性的处理建议。
     """
     import time as _time
+
+    if len(text) > MAX_TEXT:
+        raise SystemExit(
+            f'  ✗ 提示词 {len(text)} 字符，超过上限 {MAX_TEXT}（API 会回 text_too_long）。\n'
+            '     ⚠️ 对策不是「删到刚好」——实测**长负面清单 + 高 influence 反而更糟**：\n'
+            '     被点名的声学名词（嘶声/风啸/轰鸣）本身会被渲染成内容。\n'
+            '     正解是**短稿、只做正面描述**。'
+        )
 
     body = json.dumps({
         'text': text,
@@ -223,7 +246,19 @@ def measure(path):
         'low_lt300': round(float(spec[(fr >= 20) & (fr < 300)].sum() / tot), 3),
         # 「蒸汽嘶声」的直接指标：burst 旧版 93.9%
         'high_gt4000': round(float(spec[fr >= 4000].sum() / tot), 3),
+        # 手势：末段 1/8 的能量（相对峰值，dB）。量的是**结尾有没有塌掉**。
+        # 频谱全绿但结尾静音 = 下一拍之前出现空档（charge 实测踩过，见 TARGETS 注释）。
+        # ⚠️ burst **不要**给这条设下限 —— 雾散本来就该「铺开又消散」，尾段低是设计。
+        'env_tail_db': round(_tail_db(x), 1),
     }
+
+
+def _tail_db(x, parts=8):
+    """末段 1/8 的能量，相对整段峰值，单位 dB。"""
+    seg = np.array_split(np.abs(x), parts)
+    rms = [float(np.sqrt((s ** 2).mean())) for s in seg]
+    top = max(rms) or 1e-9
+    return 20 * np.log10((rms[-1] or 1e-9) / top)
 
 
 def check(name, m):
@@ -299,7 +334,7 @@ def main():
             print(
                 f'  {flag}  时长 {m["duration_s"]}s · 质心 {m["centroid_Hz"]}Hz · '
                 f'20-60Hz {m["sub_lt60"]:.3f} · 20-300Hz {m["low_lt300"]:.2f} · '
-                f'>4kHz {m["high_gt4000"]:.3f}'
+                f'>4kHz {m["high_gt4000"]:.3f} · 尾段 {m["env_tail_db"]}dB'
             )
             if fails:
                 ok_all = False

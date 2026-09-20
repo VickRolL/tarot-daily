@@ -1558,14 +1558,79 @@ HTTP 401  authentication_error / missing_permissions
 已在 `generate()` 里加 **3 次重试（2s/4s 退避）+ `Connection: close`**；
 401/402/403/422 这类**确定性**错误不重试，直接抛带处置建议的信息。
 
-### 17.4 待办（权限打开后照此续跑，无需再问）
+### 17.4 四个坑，其中两个是**方法论级的**（2026-09-21 续完）
 
-1. `python scripts/gen-sfx-elevenlabs.py --only charge burst`
-   — 生成即量指标，对着 `TARGETS` 报 PASS/FAIL（脚本已把判据前移到生成阶段）
-2. 全部 PASS → `python scripts/build-sfx.py --force` 裁齐 + 配平 + 接进站点
-   （旧 `_raw` 已备份到 `scripts/out/_raw-backup-20260921-003236/`，不满意可回退）
-3. `vite dev`（4188）→ DevBar 的「屏息 / 雾散」逐个试听，用户拍板
-4. 通过后跑 `probe-devbar-sfx` + `probe-sfx` 回归，再 `vite build` 出正式产物
+权限打开后一路跑通，但过程中撞出四件事。前两件属于「以后还会遇到」的：
+
+**★ 坑一：直连 ElevenLabs 写中文提示词基本等于随机。**
+同一份内容、同一时长，四个中文变体（influence 0.3 / 0.7）**全部**产出高频嘶声 ——
+质心 **5846~7681Hz**、4kHz 以上占 **48~60%**；换成英文立刻落到目标区间
+（burst 1254Hz、charge 140Hz）。
+⚠️ **所以「写中文比写英文好」只对 AiSounds 那个壳成立** —— 它中间挂了一层 DeepSeek。
+我们直连 API，没有那层。
+**教训：换通道时，上一通道的「提示词经验」不能直接搬 —— 那可能是壳带来的，不是模型的。**
+
+**★ 坑二：长负面清单 + 高 influence 会把「禁止的东西」渲染出来。**
+同一份 373 字中文稿：influence 0.7 → charge 质心 1708Hz；抬到 0.85 → **5935Hz**。
+理由直白：稿子里「不要嘶声 / 不要风啸 / 不要白噪声」是**一长串声学名词**，
+高 influence 下模型努力贴近文本 → **被点名的东西反而出现了**。
+→ 与第二十五轮「正面描述的声学名词会被逐字实现」是同一件事的两面：
+**点名什么就来什么，写「不要」也算点名。** 现在一律**短稿、只做正面描述**。
+
+**坑三：`text` 有 450 字符硬上限**（英文 803 字符实测被 400 拒，`text_too_long`）。
+已在客户端拦一道，免得烧一次请求才发现。
+
+**坑四（最有价值）：指标合格 ≠ 听感合格 —— 频谱全绿但「手势」是错的。**
+三条 charge 候选**频谱判据全绿**，可包络在结尾塌到了 -22.5 / -11.9 / -9.1dB，
+而节拍表里 burst 的 `at=1000ms` **正好是 charge 的结束点** ——
+等于「蓄势蓄到自己先静了，两拍之间露出空档」。
+→ 补了 `env_tail_db`（末段 1/8 相对峰值，下限 -6dB）并**做了反向验证**
+（那三条必须判红、旧 charge 的手势 -2.6dB 必须判绿；实测两条维度互相独立：
+`en-180` 频谱绿/包络红、`en-0.7` 频谱红/包络绿 —— 证明它不冗余）。
+→ 选出 `flat-200`：质心 363Hz、次低频 1.7%、**尾段 -1.2dB**。
+**方法论：指标能证明「不吵、不闷」，证明不了「这条音的手势对不对」。**
+改的时候要**先锁手势、再修频谱，一次只动一个变量**。
+
+### 17.5 另一笔旧账：判据里的期望值不许手抄（已修）
+
+`probe-sfx.js` 里写着 `CONTRACT_DUR = {charge:1.0, burst:1.0, flip:0.82, reveal:4.0}` ——
+那四个数**不是契约，是从当时的产物量出来的**（`burst:1.0` 的来历是 AiSounds
+只支持整数秒）。而 `burst` 的合同时长在项目里**同时存在三个数**：
+README 与 `build-sfx.py` 的 `SPECS.target` 写 **1.5s**、`JOBS` 写 1.2s、探针写 1.0s。
+换成 ElevenLabs（支持小数秒）按契约生成到 1.5s 后，探针立刻**假红** ——
+代码、产物、契约其实都是对的。
+
+→ 三处统一到 **1.5s**；探针的期望值改成**由产出方写出**：
+`build-sfx.py` 落 `scripts/out/_sfx_expect.js`，`run-flows.mjs` 贴在 flow 前面注入。
+判据变成「浏览器拿到的 == 流水线刚产出的」，**这才是「dist 里是不是旧文件」的真判据**。
+反向验证做过：把期望值改错 → 立刻红，并能点名是哪个音漂了（`burst 时长 1.515s vs 流水线 1.3s`）。
+另把「不超拍」单列为硬约束（超了会撞下一拍），而「短于契约」只作信息记录 ——
+`flip` / `reveal` 短于契约是用户已接受的，判红等于制造一条**永远红**的判据。
+
+**通用规则：判据的期望值必须来自产出方。手抄在判据里一定会随产物过期，而且过期是静默的。**
+
+### 17.6 验收（全部通过）
+
+| 项 | 结果 |
+|---|---|
+| 生成端 | charge `flat-200` 与 burst `L15-400` 对 `TARGETS` **全绿** |
+| `build-sfx.py --force` | **ALL_PASS true**；响度偏离 charge 0.6 / burst 0.6 / flip 0.4 / reveal 0.7 dB；charge 纯限幅零削顶 |
+| 成品实测 | charge 1.045s / -17.1dB / -12.0dBFS · burst **1.515s** / -16.1dB / -3.3dBFS |
+| `probe-sfx` dev | **ALL_PASS（17 条）**，`sfxStatsDrift` 空、`sfxOverContract` 空 |
+| `probe-sfx` prod(4199) | **ALL_PASS**，抓到的正是新哈希资源 `burst-CcC0X5pC.mp3` / `charge-BUC3WM8E.mp3` |
+| 回归 | `probe-sfx-off` / `probe-ambient` / `probe-devbar-sfx` / `audit-title` / `audit-draw` 全过，`"pass":false` 零命中 |
+| `vite build` | ✓ 7.82s；产物里 `devbar` / `连播四拍` / `屏息` / `setForceSynth` **零命中** |
+
+### 17.7 剩下的一步：**用户用耳朵拍板**
+
+指标能说明「不吵、不闷、手势对」，**说明不了「像不像这一场占卜该有的声音」**。
+候选对比页：`audio-src/candidates/index.html`（23 条候选，含被否决的旧版作对照，
+数字由指标文件生成、不手抄）。用 DevBar 或该页试听后，若要换：
+改 `scripts/_make_candidate_page.py` 的 `CHOSEN` → 拷进 `_raw/` → 重跑 `build-sfx.py`。
+
+已知可调的一处取舍：charge 现在走 `100Hz×1` 轻量高通，**偏「厚」**；
+若觉得太闷，把 `SPECS.charge` 改回 `'hpf': 240, 'passes': 2` 重跑即可 ——
+那是耳朵的活，不是指标的活。
 
 
 

@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<title>屏息 · 雾散 —— 候选试听</title>
+<style>
+ :root{color-scheme:dark}
+ body{margin:0;padding:34px 24px 70px;background:radial-gradient(circle at 50% 0%,#1b1730 0%,#0b0912 62%);
+      color:#e8e4f4;font:15px/1.65 "Noto Serif SC","Songti SC",serif}
+ h1{font-size:21px;font-weight:700;letter-spacing:.12em;margin:0 0 8px}
+ .sub{color:#8f88a8;font-size:13px;margin-bottom:30px;max-width:860px}
+ .sub b{color:#cfc7e6}
+ h2{font-size:17px;letter-spacing:.1em;margin:34px 0 4px;padding-bottom:9px;border-bottom:1px solid #2b2544}
+ .hint{color:#8f88a8;font-size:12.5px;margin-bottom:16px}
+ .cand{border:1px solid #2b2544;border-radius:12px;padding:15px 17px;margin-bottom:11px;
+       background:linear-gradient(180deg,rgba(43,37,68,.42),rgba(20,17,33,.42))}
+ .cand.on{border-color:#6a5ab8;background:linear-gradient(180deg,rgba(74,63,122,.42),rgba(20,17,33,.5))}
+ .cand.old{border-color:#5a2f2f;background:linear-gradient(180deg,rgba(74,40,40,.3),rgba(20,17,33,.4))}
+ .hd{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:9px}
+ .tag{font-size:15.5px;letter-spacing:.06em}
+ .pill{font-size:11.5px;padding:2px 9px;border-radius:20px;border:1px solid #3d3563;color:#a89fd0}
+ .pill.ok{border-color:#3f6b4d;color:#8fd3a4;background:rgba(63,107,77,.16)}
+ .pill.no{border-color:#6b3f3f;color:#d39a9a;background:rgba(107,63,63,.16)}
+ .pill.now{border-color:#6a5ab8;color:#cfc0ff;background:rgba(106,90,184,.2)}
+ audio{width:100%;height:34px;margin:3px 0 9px}
+ table{border-collapse:collapse;font-size:12.5px}
+ td{padding:2px 14px 2px 0;color:#8f88a8;white-space:nowrap}
+ td.v{color:#cfc7e6;font-variant-numeric:tabular-nums}
+ td.v.bad{color:#e29a9a}
+ .p{color:#6f6889;font-size:12px;margin-top:8px;font-style:italic}
+ .note{margin-top:34px;padding:16px 19px;border:1px solid #4a3f7a;border-radius:12px;
+       background:linear-gradient(180deg,rgba(74,63,122,.26),rgba(20,17,33,.4));
+       color:#a89fd0;font-size:13px;max-width:880px}
+ .note b{color:#cfc7e6}
+</style></head><body>
+<h1>屏息 · 雾散 —— 候选试听</h1>
+<div class="sub">
+  每个音生成了多个候选，<b>数字合格的标绿</b>，但合格 ≠ 好听 —— 请按耳朵挑，
+  告诉我「屏息用哪个、雾散用哪个」，我替换后重跑构建即可（代码不用改）。<br>
+  高亮边框那条是<b>现在已经构建进站点</b>的候选，可以先在开发者版页面里听它的实际效果。
+</div>
+
+<h2>① 屏息 · <code>charge</code></h2><div class="hint">点击水晶球后蓄势那一声 · 合同 1.0s</div>
+<div class="cand old">
+  <div class="hd"><span class="tag">旧版（你否决的那个）</span>
+  <span class="pill no">已否决</span></div>
+  <audio controls preload="metadata" src="OLD--charge.mp3"></audio>
+  <div class="p">雷云滚滚：次低频一大坨</div>
+</div>
+<div class="cand">
+  <div class="hd"><span class="tag">charge--en-180</span><span class="pill ok">指标合格</span><span class="pill">influence 0.7</span></div>
+  <audio controls preload="metadata" src="charge--en-180.mp3"></audio>
+  <table><tr><td>质心</td><td class="v">277.2Hz</td></tr><tr><td>次低频 20-60Hz</td><td class="v">0.012</td></tr><tr><td>低频 20-300Hz</td><td class="v">0.902</td></tr><tr><td>高频 >4kHz</td><td class="v">0.009</td></tr></table>
+</div>
+<div class="cand">
+  <div class="hd"><span class="tag">charge--en-320</span><span class="pill ok">指标合格</span><span class="pill">influence 0.7</span></div>
+  <audio controls preload="metadata" src="charge--en-320.mp3"></audio>
+  <table><tr><td>质心</td><td class="v">187.0Hz</td></tr><tr><td>次低频 20-60Hz</td><td class="v">0.010</td></tr><tr><td>低频 20-300Hz</td><td class="v">0.973</td></tr><tr><td>高频 >4kHz</td><td class="v">0.006</td></tr></table>
+</div>
+<div class="cand on">
+  <div class="hd"><span class="tag">charge--flat-200</span><span class="pill ok">指标合格</span><span class="pill now">当前站点在用</span><span class="pill">influence 0.7</span></div>
+  <audio controls preload="metadata" src="charge--flat-200.mp3"></audio>
+  <table><tr><td>质心</td><td class="v">363.2Hz</td></tr><tr><td>次低频 20-60Hz</td><td class="v">0.017</td></tr><tr><td>低频 20-300Hz</td><td class="v">0.841</td></tr><tr><td>高频 >4kHz</td><td class="v">0.014</td></tr></table>
+</div>
+<div class="cand">
+  <div class="hd"><span class="tag">charge--flat-260</span><span class="pill no">1 项超标</span><span class="pill">influence 0.7</span></div>
+  <audio controls preload="metadata" src="charge--flat-260.mp3"></audio>
+  <table><tr><td>质心</td><td class="v">214.3Hz</td></tr><tr><td>次低频 20-60Hz</td><td class="v bad">0.226</td></tr><tr><td>低频 20-300Hz</td><td class="v">0.922</td></tr><tr><td>高频 >4kHz</td><td class="v">0.008</td></tr></table>
+</div>
+<div class="cand">
+  <div class="hd"><span class="tag">charge--en-240</span><span class="pill no">1 项超标</span><span class="pill">influence 0.7</span></div>
+  <audio controls preload="metadata" src="charge--en-240.mp3"></audio>
+  <table><tr><td>质心</td><td class="v">169.2Hz</td></tr><tr><td>次低频 20-60Hz</td><td class="v bad">0.250</td></tr><tr><td>低频 20-300Hz</td><td class="v">0.943</td></tr><tr><td>高频 >4kHz</td><td class="v">0.005</td></tr></table>
+</div>
+<div class="cand">
+  <div class="hd"><span class="tag">charge--flat-320</span><span class="pill no">1 项超标</span><span class="pill">influence 0.7</span></div>
+  <audio controls preload="metadata" src="charge--flat-320.mp3"></audio>
+  <table><tr><td>质心</td><td class="v">150.7Hz</td></tr><tr><td>次低频 20-60Hz</td><td class="v bad">0.466</td></tr><tr><td>低频 20-300Hz</td><td class="v">0.653</td></tr><tr><td>高频 >4kHz</td><td class="v">0.007</td></tr></table>
+</div>
+<div class="cand">
+  <div class="hd"><span class="tag">charge--en-0.7</span><span class="pill no">2 项超标</span><span class="pill">influence 0.7</span></div>
+  <audio controls preload="metadata" src="charge--en-0.7.mp3"></audio>
+  <table><tr><td>质心</td><td class="v bad">140.3Hz</td></tr><tr><td>次低频 20-60Hz</td><td class="v bad">0.285</td></tr><tr><td>低频 20-300Hz</td><td class="v">0.565</td></tr><tr><td>高频 >4kHz</td><td class="v">0.007</td></tr></table>
+</div>
+<div class="cand">
+  <div class="hd"><span class="tag">charge--rise-220</span><span class="pill no">2 项超标</span><span class="pill">influence 0.7</span></div>
+  <audio controls preload="metadata" src="charge--rise-220.mp3"></audio>
+  <table><tr><td>质心</td><td class="v">151.1Hz</td></tr><tr><td>次低频 20-60Hz</td><td class="v bad">0.499</td></tr><tr><td>低频 20-300Hz</td><td class="v">0.954</td></tr><tr><td>高频 >4kHz</td><td class="v">0.007</td></tr></table>
+</div>
+<div class="cand">
+  <div class="hd"><span class="tag">charge--zh-i85</span><span class="pill no">3 项超标</span><span class="pill">influence 0.85</span></div>
+  <audio controls preload="metadata" src="charge--zh-i85.mp3"></audio>
+  <table><tr><td>质心</td><td class="v bad">5935.0Hz</td></tr><tr><td>次低频 20-60Hz</td><td class="v">0.012</td></tr><tr><td>低频 20-300Hz</td><td class="v bad">0.115</td></tr><tr><td>高频 >4kHz</td><td class="v bad">0.495</td></tr></table>
+</div>
+<div class="cand">
+  <div class="hd"><span class="tag">charge--zh-0.7</span><span class="pill no">3 项超标</span><span class="pill">influence 0.7</span></div>
+  <audio controls preload="metadata" src="charge--zh-0.7.mp3"></audio>
+  <table><tr><td>质心</td><td class="v bad">6496.8Hz</td></tr><tr><td>次低频 20-60Hz</td><td class="v">0.011</td></tr><tr><td>低频 20-300Hz</td><td class="v bad">0.100</td></tr><tr><td>高频 >4kHz</td><td class="v bad">0.535</td></tr></table>
+</div>
+<div class="cand">
+  <div class="hd"><span class="tag">charge--zh-0.3</span><span class="pill no">3 项超标</span><span class="pill">influence 0.3</span></div>
+  <audio controls preload="metadata" src="charge--zh-0.3.mp3"></audio>
+  <table><tr><td>质心</td><td class="v bad">7681.2Hz</td></tr><tr><td>次低频 20-60Hz</td><td class="v">0.009</td></tr><tr><td>低频 20-300Hz</td><td class="v bad">0.078</td></tr><tr><td>高频 >4kHz</td><td class="v bad">0.600</td></tr></table>
+</div>
+<h2>② 雾散 · <code>burst</code></h2><div class="hint">牌面揭晓前雾气弥散 · 合同 1.2s</div>
+<div class="cand old">
+  <div class="hd"><span class="tag">旧版（你否决的那个）</span>
+  <span class="pill no">已否决</span></div>
+  <audio controls preload="metadata" src="OLD--burst.mp3"></audio>
+  <div class="p">电饭煲开盖：全是高频嘶声</div>
+</div>
+<div class="cand on">
+  <div class="hd"><span class="tag">burst--L15-400</span><span class="pill ok">指标合格</span><span class="pill now">当前站点在用</span><span class="pill">influence 0.7</span></div>
+  <audio controls preload="metadata" src="burst--L15-400.mp3"></audio>
+  <table><tr><td>质心</td><td class="v">1962.1Hz</td></tr><tr><td>次低频 20-60Hz</td><td class="v">0.009</td></tr><tr><td>低频 20-300Hz</td><td class="v">0.622</td></tr><tr><td>高频 >4kHz</td><td class="v">0.146</td></tr></table>
+</div>
+<div class="cand">
+  <div class="hd"><span class="tag">burst--L15-b</span><span class="pill ok">指标合格</span><span class="pill">influence 0.7</span></div>
+  <audio controls preload="metadata" src="burst--L15-b.mp3"></audio>
+  <table><tr><td>质心</td><td class="v">326.4Hz</td></tr><tr><td>次低频 20-60Hz</td><td class="v">0.205</td></tr><tr><td>低频 20-300Hz</td><td class="v">0.924</td></tr><tr><td>高频 >4kHz</td><td class="v">0.021</td></tr></table>
+</div>
+<div class="cand">
+  <div class="hd"><span class="tag">burst--en-0.5</span><span class="pill ok">指标合格</span><span class="pill">influence 0.5</span></div>
+  <audio controls preload="metadata" src="burst--en-0.5.mp3"></audio>
+  <table><tr><td>质心</td><td class="v">543.2Hz</td></tr><tr><td>次低频 20-60Hz</td><td class="v">0.282</td></tr><tr><td>低频 20-300Hz</td><td class="v">0.883</td></tr><tr><td>高频 >4kHz</td><td class="v">0.037</td></tr></table>
+</div>
+<div class="cand">
+  <div class="hd"><span class="tag">burst--en-0.7</span><span class="pill ok">指标合格</span><span class="pill">influence 0.7</span></div>
+  <audio controls preload="metadata" src="burst--en-0.7.mp3"></audio>
+  <table><tr><td>质心</td><td class="v">1253.6Hz</td></tr><tr><td>次低频 20-60Hz</td><td class="v">0.246</td></tr><tr><td>低频 20-300Hz</td><td class="v">0.781</td></tr><tr><td>高频 >4kHz</td><td class="v">0.096</td></tr></table>
+</div>
+<div class="cand">
+  <div class="hd"><span class="tag">burst--en-0.85</span><span class="pill no">1 项超标</span><span class="pill">influence 0.85</span></div>
+  <audio controls preload="metadata" src="burst--en-0.85.mp3"></audio>
+  <table><tr><td>质心</td><td class="v bad">222.5Hz</td></tr><tr><td>次低频 20-60Hz</td><td class="v">0.252</td></tr><tr><td>低频 20-300Hz</td><td class="v">0.946</td></tr><tr><td>高频 >4kHz</td><td class="v">0.012</td></tr></table>
+</div>
+<div class="cand">
+  <div class="hd"><span class="tag">burst--L15-a</span><span class="pill no">1 项超标</span><span class="pill">influence 0.7</span></div>
+  <audio controls preload="metadata" src="burst--L15-a.mp3"></audio>
+  <table><tr><td>质心</td><td class="v bad">218.5Hz</td></tr><tr><td>次低频 20-60Hz</td><td class="v">0.251</td></tr><tr><td>低频 20-300Hz</td><td class="v">0.964</td></tr><tr><td>高频 >4kHz</td><td class="v">0.011</td></tr></table>
+</div>
+<div class="cand">
+  <div class="hd"><span class="tag">burst--L15-1000</span><span class="pill no">2 项超标</span><span class="pill">influence 0.7</span></div>
+  <audio controls preload="metadata" src="burst--L15-1000.mp3"></audio>
+  <table><tr><td>质心</td><td class="v bad">5005.0Hz</td></tr><tr><td>次低频 20-60Hz</td><td class="v">0.011</td></tr><tr><td>低频 20-300Hz</td><td class="v">0.187</td></tr><tr><td>高频 >4kHz</td><td class="v bad">0.411</td></tr></table>
+</div>
+<div class="cand">
+  <div class="hd"><span class="tag">burst--zh-0.3</span><span class="pill no">2 项超标</span><span class="pill">influence 0.3</span></div>
+  <audio controls preload="metadata" src="burst--zh-0.3.mp3"></audio>
+  <table><tr><td>质心</td><td class="v bad">5845.8Hz</td></tr><tr><td>次低频 20-60Hz</td><td class="v">0.012</td></tr><tr><td>低频 20-300Hz</td><td class="v">0.107</td></tr><tr><td>高频 >4kHz</td><td class="v bad">0.486</td></tr></table>
+</div>
+<div class="cand">
+  <div class="hd"><span class="tag">burst--zh-0.7</span><span class="pill no">2 项超标</span><span class="pill">influence 0.7</span></div>
+  <audio controls preload="metadata" src="burst--zh-0.7.mp3"></audio>
+  <table><tr><td>质心</td><td class="v bad">6860.4Hz</td></tr><tr><td>次低频 20-60Hz</td><td class="v">0.013</td></tr><tr><td>低频 20-300Hz</td><td class="v">0.089</td></tr><tr><td>高频 >4kHz</td><td class="v bad">0.549</td></tr></table>
+</div>
+<div class="cand">
+  <div class="hd"><span class="tag">burst--L15-700</span><span class="pill no">3 项超标</span><span class="pill">influence 0.7</span></div>
+  <audio controls preload="metadata" src="burst--L15-700.mp3"></audio>
+  <table><tr><td>质心</td><td class="v bad">12323.3Hz</td></tr><tr><td>次低频 20-60Hz</td><td class="v">0.003</td></tr><tr><td>低频 20-300Hz</td><td class="v bad">0.011</td></tr><tr><td>高频 >4kHz</td><td class="v bad">0.953</td></tr></table>
+</div>
+<div class="note">
+  <b>指标怎么读</b>：<b>质心</b>是能量的重心频率，太低=闷雷、太高=嘶声；
+  <b>次低频 20-60Hz</b>是「滚」的直接来源（旧屏息 50.6% → 现在要做到 &lt;15%）；
+  <b>低频 20-300Hz</b>是「厚度」，太低会变成没底子的空气声；
+  <b>高频 &gt;4kHz</b>是「嘶」，旧雾散 93.9% 全在这里。<br><br>
+  <b>一个反直觉的结论</b>：中文提示词喂给 ElevenLabs 基本是失效的 ——
+  同一份内容，中文稿生成的质心在 6000~7700Hz（纯嘶声），换成英文立刻落到 140~1250Hz。
+  所以这几条候选全是英文稿。<br><br>
+  <b>听的时候留意</b>：屏息要「厚实、缓缓浮现」，不能有「滚」；雾散要「柔软的铺开」，
+  不能有「嘶」或「噗」的瞬击。若都不满意，说清是「太闷 / 太亮 / 有滚动感 / 起音太硬」，
+  我按这个方向重生成 —— 每条的额度成本只有 10~12 点，可以多试。
+</div></body></html>

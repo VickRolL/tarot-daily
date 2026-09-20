@@ -92,10 +92,28 @@ except ImportError:
 #            已经被 normalize() 补过一次了，于是 charge 悄悄比其它三个响 2.9dB。
 #            2026-09-20 修正为 1.0。
 SPECS = {
-    # 参数是扫出来的（180~360Hz × 2~3 级联，见 2026-09-20 会话记录）：
-    # 240Hz×2 是「质心 623Hz / 低频占比 0.57」与「别滤成薄片」的平衡点；
-    # passes=3 时峰值系数恶化到 ~20dB，同样响度下动态被压得没法听。
-    'charge': {'target': 1.0, 'hpf': 240, 'passes': 2, 'rms': -14.0, 'fade_out': 0.08, 'trim': 1.0, 'rescue': True,  'clip': False},
+    # ⚠️ 2026-09-21 重新定标：**去泥这一步的调参对象已经不存在了。**
+    #
+    # 原设置 240Hz × 2 是为「旧的被否决 charge」扫出来的 —— 那条 raw 质心 97Hz、
+    # 低频占比 0.94，是**真泥**，需要一记猛药；配套的 `rescue=True` 门槛
+    # （质心 ≥1.5 倍 且 低频占比 <0.6）也是用来证明「这记猛药真的救上来了」。
+    #
+    # 换成 ElevenLabs 重做的 charge 之后：raw 质心 286Hz、次低频(20-60Hz) 仅 0.017
+    # —— 它本身**已经不泥了**，而且「厚」正是用户点名要的方向
+    # （「柔和的低频暖流，有厚度地缓缓浮现」）。此时：
+    #   · 沿用 240Hz×2 → 质心被推到 627Hz、低频占比掉到 0.66，
+    #     `rescue` 门槛因 0.66 ≥ 0.6 判红 ★ 但红得没有道理：
+    #     **门槛的前提（原始是泥）已经不成立**，硬套就是本项目踩过两次的
+    #     「只在特定素材上成立的门槛，不能无差别套到另一条路径 / 另一批素材」。
+    #   · 真正该守的那条线（次低频不超标、质心不下沉）已经**前移到生成阶段**
+    #     （`gen-sfx-elevenlabs.py` 的 TARGETS：sub_lt60 ≤0.15、centroid ≥150Hz），
+    #     在这里再卡一次是冗余的，而且是错的。
+    # → 改成 100Hz×1 的**轻量次声保护**（只挡真正的隆隆/直流，不动 100Hz 以上的body），
+    #   并把 rescue 关掉（它的前提没了；rescue=False 分支只要求「滤波别把音弄暗」，
+    #   这个要求对任何素材都成立，才是该留的那条）。
+    # ⚠️ 如果听起来**太闷**，把这行改回 `'hpf': 240, 'passes': 2` 重跑即可 ——
+    #   那是「厚」与「清」的取舍，属于耳朵的活，不是指标的活。
+    'charge': {'target': 1.0, 'hpf': 100, 'passes': 1, 'rms': -14.0, 'fade_out': 0.08, 'trim': 1.0, 'rescue': False, 'clip': False},
     'burst':  {'target': 1.5, 'hpf': 90,  'passes': 2, 'rms': -13.0, 'fade_out': 0.12, 'trim': 1.0, 'rescue': False, 'clip': False},
     'flip':   {'target': 1.5, 'hpf': 120, 'passes': 2, 'rms': -14.0, 'fade_out': 0.10, 'trim': 1.0, 'rescue': False, 'clip': True},
     # ⚠️ 合同写的是 5 秒，实际生成的是 **4 秒** —— 账户余额只够 4 秒（20 点/秒）。
@@ -547,6 +565,31 @@ def main():
     results = [by_name[n] for n in SPECS if n in by_name]
     with open(REPORT, 'w', encoding='utf-8') as f:
         json.dump(results, f, ensure_ascii=False, indent=2)
+
+    # ── 把「刚产出的成品的期望值」交给前端探针 ──────────────────────────
+    # 为什么要有这一步：`probe-sfx.js` 原来把合同时长**手抄**在自己里面
+    # （`CONTRACT_DUR = {charge:1.0, burst:1.0, …}`）—— 而那个 `burst:1.0` 不是契约，
+    # 是**从当时的旧产物量出来的**（AiSounds 只支持整数秒，实际只能出 1 秒）。
+    # 2026-09-21 burst 按契约改成 1.5s 后，这条判据立刻**假红**。
+    # 手抄的期望值一定会随产物过期 → 改成由产出方写出，探针只负责比对。
+    # 这样它抓的还是它本来要抓的东西（**dist 里是上一版旧文件**），且不会再漂。
+    prelude = os.path.join(os.path.dirname(REPORT), '_sfx_expect.js')
+    expect = {
+        r['name']: {
+            'dur': r['rt_dur'],            # 编码后回读时长（浏览器解码应与此一致）
+            'rmsDb': r['rt_rms_db'],
+            'peakDb': r['rt_peak_db'],
+            'bytes': r['out_bytes'],
+            'targetDur': r['target_dur'],  # 契约长度（节拍余量的依据）
+        }
+        for r in results
+    }
+    with open(prelude, 'w', encoding='utf-8') as f:
+        f.write('/* 由 scripts/build-sfx.py 自动生成，请勿手改。*/\n')
+        f.write('window.__SFX_EXPECT = ')
+        json.dump(expect, f, ensure_ascii=False, indent=2)
+        f.write(';\n')
+    print(f'期望值已写给探针：{prelude}')
 
     have_raw = [n for n in SPECS if os.path.exists(os.path.join(RAW_DIR, f'{n}-raw.mp3'))]
     done = [n for n in have_raw if os.path.exists(os.path.join(OUT_DIR, f'{n}.mp3'))]

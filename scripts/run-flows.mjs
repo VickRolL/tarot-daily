@@ -75,7 +75,26 @@ for (const name of names) {
     results.push({ name, ok: false, why: 'flow 不存在' })
     continue
   }
-  const args = [SHOT, URL_BASE, resolve(OUT, name + '.png'), ...extra, '--eval-file', flow]
+  /* ── 可选前置：把「产物生成者写下的期望值」注入页面 ──────────────────
+   * 为什么：探针里的期望值若**手抄**，就会随产物一起过期，而且是**静默**过期 ——
+   * 实测 `probe-sfx.js` 里手抄的 `burst: 1.0` 不是契约，是当时旧产物量出来的值；
+   * 2026-09-21 burst 按契约改成 1.5s 后，那条判据立刻假红。
+   * 现在由 `build-sfx.py` 把刚产出的成品期望值写成 `scripts/out/_sfx_expect.js`，
+   * 这里把它贴在 flow 前面一起 eval（`--eval-file` 只能给一个文件，所以先拼再传）。
+   * 文件不存在就照常单跑 flow —— 老流程一行都不用改。 */
+  const prelude = resolve(OUT, '_sfx_expect.js')
+  let evalFile = flow
+  if (existsSync(prelude)) {
+    const merged = resolve(OUT, `_flow-${name}.js`)
+    writeFileSync(
+      merged,
+      readFileSync(prelude, 'utf8') + '\n' + readFileSync(flow, 'utf8'),
+      'utf8'
+    )
+    evalFile = merged
+  }
+
+  const args = [SHOT, URL_BASE, resolve(OUT, name + '.png'), ...extra, '--eval-file', evalFile]
   process.stdout.write(`▶ ${name.padEnd(16)} … `)
   const r = spawnSync(process.execPath, args, { cwd: ROOT, encoding: 'utf8' })
   const log = (r.stdout || '') + (r.stderr || '')

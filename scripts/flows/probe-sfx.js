@@ -270,8 +270,22 @@ out.PASS_sfxSynthFallback =
    不是拍出来的：
      · 响度极差 ≤ 3dB —— 实测 1.1dB（charge -14.7 / burst -13.6 / flip -14.5 / reveal -14.7）
      · 解码峰值 ≤ 0dBFS —— mp3 的样本间过冲会在这里显形，超了播放端就硬削
-     · 时长 ±0.12s 内对得上合同表 —— 专抓「dist 里是上一版旧文件」这类静默错配 */
-const CONTRACT_DUR = { charge: 1.0, burst: 1.0, flip: 0.82, reveal: 4.0 }
+     · 与**流水线刚产出的成品**对得上 —— 专抓「dist 里是上一版旧文件」这类静默错配
+
+   ⚠️ 期望值**不许手抄**（2026-09-21 修的旧账）：原来这里写着
+   `const CONTRACT_DUR = { charge: 1.0, burst: 1.0, flip: 0.82, reveal: 4.0 }` ——
+   那四个数**不是契约，是从当时的产物量出来的**（`burst:1.0` 的来历是 AiSounds
+   只支持整数秒）。于是 burst 按契约改成 1.5s 之后，这条判据立刻**假红**，
+   而代码、产物、契约其实都是对的。
+   → 现在期望值由产出方写出：`build-sfx.py` 落 `scripts/out/_sfx_expect.js`，
+     `run-flows.mjs` 贴在 flow 前面注入页面。**判据的期望值必须来自产出方，
+     手抄在判据里一定会随产物过期，而且过期是静默的。** */
+const EXPECT = window.__SFX_EXPECT || null
+out.sfxExpect = EXPECT ? Object.keys(EXPECT) : null
+if (!EXPECT) {
+  out.sfxExpectHint =
+    '缺少 scripts/out/_sfx_expect.js —— 先跑 python scripts/build-sfx.py（它负责产出期望值）'
+}
 const sfxStats = window.__tarotSfx ? window.__tarotSfx.stats : null
 out.sfxStats = sfxStats
 const sNames = Object.keys(sfxStats || {})
@@ -284,10 +298,41 @@ out.PASS_sfxLoudness =
   sNames.length === nAssets && out.sfxRmsSpreadDb !== null && out.sfxRmsSpreadDb <= 3.0
 out.sfxPeakOver = sNames.filter((n) => sfxStats[n].peakDb > 0.0)
 out.PASS_sfxNoOver = sNames.length > 0 && out.sfxPeakOver.length === 0
-out.sfxDurDrift = sNames
-  .filter((n) => Math.abs(sfxStats[n].dur - CONTRACT_DUR[n]) > 0.12)
-  .map((n) => `${n} ${sfxStats[n].dur}s vs 合同 ${CONTRACT_DUR[n]}s`)
-out.PASS_sfxDuration = sNames.length === nAssets && out.sfxDurDrift.length === 0
+
+/* 与流水线成品比对：这才是「dist 里是不是旧文件」的真判据。
+   容差为什么不是 0：浏览器 `decodeAudioData` 与 python miniaudio 是两条解码路径，
+   实测同一文件差 0~0.4dB；时长则是逐位相同，所以时长卡得很紧（0.05s）。 */
+out.sfxStatsDrift = []
+if (EXPECT) {
+  for (const n of sNames) {
+    const e = EXPECT[n]
+    if (!e) {
+      out.sfxStatsDrift.push(`${n} 不在流水线报告里`)
+      continue
+    }
+    if (Math.abs(sfxStats[n].dur - e.dur) > 0.05)
+      out.sfxStatsDrift.push(`${n} 时长 ${sfxStats[n].dur}s vs 流水线 ${e.dur}s`)
+    if (Math.abs(sfxStats[n].rmsDb - e.rmsDb) > 0.6)
+      out.sfxStatsDrift.push(`${n} 响度 ${sfxStats[n].rmsDb}dB vs 流水线 ${e.rmsDb}dB`)
+    if (Math.abs(sfxStats[n].peakDb - e.peakDb) > 1.0)
+      out.sfxStatsDrift.push(`${n} 峰值 ${sfxStats[n].peakDb}dB vs 流水线 ${e.peakDb}dB`)
+  }
+}
+out.PASS_sfxDuration =
+  sNames.length === nAssets && !!EXPECT && out.sfxStatsDrift.length === 0
+
+/* 「不超拍」= 硬约束：超了契约长度就会撞到下一拍（节拍表写死在 DRAW_RITUAL 里）。
+   短于契约**只作信息**记录，不判红 —— flip/reveal 因为生成通道的额度限制
+   实际交付短于契约（0.86s / 4.05s，合同各 1.5s / 5s），用户已明确接受
+   （「后面两个音效的效果还可以，暂时可以先」）。把它判红等于制造一条
+   「永远红」的判据，和「永远绿」一样没用。 */
+out.sfxOverContract = sNames
+  .filter((n) => EXPECT && EXPECT[n] && sfxStats[n].dur > EXPECT[n].targetDur + 0.12)
+  .map((n) => `${n} ${sfxStats[n].dur}s > 合同 ${EXPECT[n].targetDur}s`)
+out.PASS_sfxNoOverrun = !!EXPECT && out.sfxOverContract.length === 0
+out.sfxShortOfContract = sNames
+  .filter((n) => EXPECT && EXPECT[n] && sfxStats[n].dur < EXPECT[n].targetDur - 0.12)
+  .map((n) => `${n} ${sfxStats[n].dur}s < 合同 ${EXPECT[n].targetDur}s（已接受）`)
 
 /* 抽完牌：开关必须还露在解读面板之上（它固定，面板 z-index 50）*/
 out.panelUp = !!$('.panel')
@@ -322,6 +367,7 @@ out.PASS = {
   sfxLoudness: out.PASS_sfxLoudness,
   sfxNoClip: out.PASS_sfxNoOver,
   sfxDuration: out.PASS_sfxDuration,
+  sfxNoOverrun: out.PASS_sfxNoOverrun,
   nodesConnected: out.PASS_nodes,
   toggleAlwaysClickable: out.toggleHitIsSelf && out.toggleHitAfterPanel,
   orbStillHittable: out.orbHittable === 'orb',
