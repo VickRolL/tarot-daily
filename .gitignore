@@ -25,6 +25,13 @@ scripts/out/
 # 详见 _archive/v1-2026-09-19/SNAPSHOT.md
 _archive/
 
+# ---- 本机密钥：绝不入库 ----
+# 生成通道的 API key 写这里（`scripts/gen-sfx-elevenlabs.py` 会读 .env.local）。
+# 为什么不走命令行参数：`--api-key` 会留在 shell 历史里。
+.env
+.env.local
+*.key
+
 # ---- 依赖与缓存 ----
 node_modules/
 __pycache__/

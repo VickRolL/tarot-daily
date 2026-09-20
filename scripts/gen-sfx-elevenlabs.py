@@ -100,6 +100,26 @@ MODEL = 'eleven_text_to_sound_v2'
 RAW_DIR = os.path.join('audio-src', 'sfx', '_raw')
 
 
+def read_env_file(path='.env.local'):
+    """从 .env.local 读 ELEVENLABS_API_KEY。
+
+    为什么要这个：走 `--api-key sk_xxx` 会把密钥留在 shell 历史里，
+    而 export 出来的环境变量在下次会话就没了。放文件里最省事且不进 git
+    （.gitignore 有 .env / .env.local / *.key）。
+    """
+    if not os.path.exists(path):
+        return None
+    with open(path, encoding='utf-8') as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith('#') or '=' not in line:
+                continue
+            k, v = line.split('=', 1)
+            if k.strip() == 'ELEVENLABS_API_KEY':
+                return v.strip().strip('"').strip("'")
+    return None
+
+
 def generate(api_key, text, duration, influence, model=MODEL, timeout=120):
     """调一次 API，返回 mp3 字节。错误信息尽量说清是哪一类。"""
     body = json.dumps({
@@ -201,14 +221,17 @@ def main():
     ap.add_argument('--dry-run', action='store_true', help='只打印提示词，不调 API')
     args = ap.parse_args()
 
-    key = args.api_key or os.environ.get('ELEVENLABS_API_KEY')
+    key = args.api_key or os.environ.get('ELEVENLABS_API_KEY') or read_env_file()
     names = [n for n in JOBS if n in args.only]
 
     print(f'模型 {MODEL} · prompt_influence {args.influence} · 变体 {args.variants}')
     if not key and not args.dry_run:
-        print('\n✗ 没有 API key。两种给法：')
-        print('    export ELEVENLABS_API_KEY=sk_xxx   （Git Bash）')
-        print('    python scripts/gen-sfx-elevenlabs.py --api-key sk_xxx')
+        print('\n✗ 没有 API key。三种给法（推荐第一种：不进 shell 历史、下次还能用）：')
+        print('    1) 项目根建 .env.local，写一行  ELEVENLABS_API_KEY=sk_xxx')
+        print('       （.gitignore 已忽略 .env / .env.local / *.key，不会入库）')
+        print('    2) export ELEVENLABS_API_KEY=sk_xxx   （只对当前 shell 有效）')
+        print('    3) --api-key sk_xxx                   （会留在 shell 历史里）')
+        print('  建 key：https://elevenlabs.io/app/settings/api-keys')
         print('  免费层（$0/月，10k credits）就含 Sound Effects；')
         print('  但商用授权要 Starter($6/月) 起 —— 商用前请确认。')
         return 2
