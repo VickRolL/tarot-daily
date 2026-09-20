@@ -1,4 +1,4 @@
-/* 开发模式自检：不限次数连抽 + 重播迎接 + 牌面总览
+/* 开发模式自检：调试条 —— 不限次数连抽 / 重播迎接 / 音效试听
    ==========================================================================
    运行目标：**开发服务器**（`vite dev`，带调试条）。
    2026-09-19 前跑的是构建出来的开发者版 `dist-dev/`，那份产物已随离线通道一并移除。
@@ -10,9 +10,19 @@
      · 点「再抽一次」能连抽第二次（证明真的不限次数，而不是靠刷新页面）
      · 抽牌不落盘（unlimited 不写 localStorage，所以刷新后也不会被锁住）
      · 「重播迎接」能把信封重新播一遍，且**不清掉**已抽到的牌
-     · 「牌面总览」能打开、22 张都在、能关掉
      · 调试条不遮挡面板按钮（命中测试，见 ④.5）
      · 控制台无报错
+
+   ⚠️ 「牌面总览 / 图鉴」那一段**已移出本 flow**（2026-09-20）。
+   理由和调试条那个按钮被删掉是同源的：图鉴这一轮对用户开放了（入口在顶栏），
+   它不再是「开发模式专属」的功能，验证归属 `probe-gallery`。
+   留在这里的代价是实测过的 —— 这段代码找的是调试条里**已经不存在的**
+   「牌面总览」按钮，`btnByText` 返回 undefined、`?.click()` 是空操作，
+   于是 `gallery.items` 永远是 0、`openedMs` 永远是 null；
+   而报告里没有任何字段会因此变红：**一条永远为空、又永远不报警的判据，
+   比没有判据更糟** —— 它会让人以为这件事「验过了」。
+
+   音效调试区（逐个试听 / 连播 / 循环 / 素材↔合成）的细判据在 `probe-devbar-sfx`，不在这里重复。
 
    ⚠️ 等待一律用轮询（waitFor）而不是固定 sleep：
    无头软件光栅化下，首屏迎接动画的挂载开销比墙钟时长更飘，
@@ -67,7 +77,7 @@ const settle = async (el, ms = 5000, step = 120) => {
 
 const barBtns = () => [...document.querySelectorAll('.devbar button')]
 /** 按文案找按钮 —— **全文档**找，不能只在 .devbar 里找：
-    「再抽一次」在解读面板里、「关闭」在牌面总览里。第一版就栽在这里。 */
+    「再抽一次」在解读面板里，不在调试条里。第一版就栽在这里。 */
 const btnByText = (t) => [...document.querySelectorAll('button')].find((b) => b.textContent.trim() === t)
 const panelActions = () => [...document.querySelectorAll('.panel__actions button')].map((b) => b.textContent.trim())
 
@@ -179,23 +189,12 @@ report.replayDone = {
   panelKeptAfter: !!$('.panel')
 }
 
-/* ⑥ 牌面总览：打开 → 等素材探测完 → 数牌 → 关掉 */
-const galleryBtn = btnByText('牌面总览')
-report.galleryBtnFound = !!galleryBtn
-galleryBtn?.click()
-const gOpened = await waitFor(() => $('.gallery'), 5000)
-/* 探测 22 张插画要逐个 onload，不等它出结果的话读到的永远是「正在探测素材…」 */
-const gProbed =
-  gOpened === null ? null : await waitFor(() => !/正在探测/.test($('.gallery__hint')?.textContent ?? ''), 12000)
-report.gallery = {
-  openedMs: gOpened,
-  probedMs: gProbed,
-  items: document.querySelectorAll('.gallery__item').length,
-  hint: $('.gallery__hint')?.textContent?.trim() ?? null
-}
-btnByText('关闭')?.click()
-report.galleryClosedMs = await waitFor(() => !$('.gallery'), 3000)
+/* ⑥ 图鉴：**已移出**（见文件头）。这里只确认调试条活到最后 ——
+      它在 `DEV_TOOLS` 为真时才渲染，中途消失说明有东西把根节点重挂了。 */
 report.devbarAliveAtEnd = !!$('.devbar')
+report.sfxControls = barBtns()
+  .map((b) => b.textContent.trim())
+  .filter((t) => ['屏息', '雾散', '丝绢', '颂钵', '连播四拍', '循环', '素材', '合成'].includes(t))
 
 report.errors = errors
 return report

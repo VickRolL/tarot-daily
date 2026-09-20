@@ -1777,6 +1777,12 @@ body {
   border-radius: 14px;
   padding: 8px;
   pointer-events: none;
+  /* 高度保险（2026-09-20）：音效调试区接进来后窄条长到 ~430px（实测 1564×708
+     视口下占 61%）。它在矮视口上会从底部顶出屏幕顶，最上面那排按钮就彻底
+     点不到了 —— 那正是这个元素历史上出过的那类事故。overflow 只在真装不下时
+     才出现滚动条，正常视口不会看到它。 */
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
 }
 
 /* 容器不吃点击，只有按钮吃 —— 这样即使视觉上有一点点交叠，也不会吞掉底下的按钮 */
@@ -1806,6 +1812,23 @@ body {
   color: var(--ink);
   background: var(--glow);
   border-color: transparent;
+}
+
+/* 音效调试区的两列网格（2026-09-20）。四个音名都是两字，单个按钮约 26px，
+   两列刚好塞进 92px 的窄条宽度 —— 改成一列会让调试条白白长出一截，
+   而它贴底，越长越容易顶到上面的内容。 */
+.devbar__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+}
+
+/* 分隔两组功能。用上边框而不是空行 —— 窄条里每一像素高度都要省着用 */
+.devbar__cap--sep {
+  border-top: 1px solid var(--line);
+  margin-top: 2px;
+  padding-top: 7px;
+  opacity: 0.45;
 }
 
 /* ============================ 牌面总览 ============================ */

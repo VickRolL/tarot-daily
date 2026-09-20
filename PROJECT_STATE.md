@@ -839,9 +839,12 @@ APP_URL=http://127.0.0.1:4199/ "$N" scripts/run-flows.mjs audit-title audit-draw
       抓取端要求绝对地址，改写成本地相对路径反而是错的。检查时按**整行**判断才跳得掉
       （`property="og:url"` 写在 `content` 之前，逐段匹配匹配不到）
   - **脚本自带三道自检**（构建即验）：① 零残留绝对路径（`og:url` 豁免）；
-    ② 产物 JS 里不含「重播迎接 / 抽牌模式 / 牌面总览 / 重置今日」，一旦出现说明 `DevBar` / `CardGallery`
+    ② 产物 JS 里不含「重播迎接 / 抽牌模式 / 重置今日 / 屏息 / 连播四拍」，一旦出现说明 `DevBar`
     被打进了生产包 → 脚本**报错并非零码退出**；③ `serve_user_preview.mjs` 启动前校验入口 script 存在，
     避免「服务起着但页面是白的」
+    ⚠️ 这条名单原本还含「牌面总览」、并顺带把 `CardGallery` 也列成「不该进包」（2026-09-20 更正）：
+    图鉴这一轮对用户开放了（入口在顶栏「牌之图鉴」），它**本来就该**在正式产物里 ——
+    旧写法会让后来者误以为「产物里有图鉴 = 打包错了」。被摇掉的只有 `DevBar`。
   - **`package.json` 加两个快捷脚本**：`npm run user:build` / `npm run user:serve`
   - **`scripts/package_project.py` 排除 `dist` 与 `dist-user`**：都是随时可再生成的构建产物，
     进包只会让人误以为是「已发布的版本」

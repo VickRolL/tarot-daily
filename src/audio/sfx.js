@@ -98,6 +98,22 @@ let loadStarted = false
 /** 每个音最近一次实际走的路（'asset' | 'synth'），供探针断言 */
 const lastKind = {}
 
+/**
+ * 调试开关：强制走合成路。**只在开发版（DevBar）里用**。
+ *
+ * 为什么值得留一个口子：素材路与合成路是两套完全不同的实现（AI 录音 vs 数字合成），
+ * 要回答「素材到底比合成好在哪」必须能**在同一条链路上 A/B 切换** ——
+ * 分两个页面各听一遍不算对比，中间隔着不同的 ctx / 总线 / 混响，
+ * 听出来的差异说不清是素材的还是链路的。
+ *
+ * 正式构建里 DevBar 整块被摇掉，没有调用方，这个分支跟着消失。
+ */
+let forceSynth = false
+export const setForceSynth = (on) => {
+  forceSynth = !!on
+}
+export const isForceSynth = () => forceSynth
+
 const toDb = (x) => (x > 0 ? 20 * Math.log10(x) : -999)
 const round1 = (x) => Math.round(x * 10) / 10
 
@@ -152,6 +168,7 @@ function loadAssets(c) {
 
 /** 播素材。没有解码好的缓冲就返回 false（调用方退回合成） */
 function playAsset(c, name) {
+  if (forceSynth) return false /* 调试用：DevBar 的 A/B 开关 */
   const buf = buffers[name]
   if (!buf) return false
   const src = c.createBufferSource()
@@ -180,7 +197,8 @@ if (typeof window !== 'undefined') {
       loaded: Object.keys(buffers),
       failed: { ...failed },
       kinds: { ...lastKind },
-      stats: { ...stats }
+      stats: { ...stats },
+      forceSynth
     })
   })
   /* engine.unlock() 在手势栈里派发（见 engine.js），这里开始预载 */

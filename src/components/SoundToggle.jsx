@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { muteAll, readSoundPref, setSoundOn, unlock, unmuteAll } from '../audio/sfx'
 import { startAmbient, stopAmbient } from '../audio/ambient'
 
@@ -25,6 +25,20 @@ export default function SoundToggle() {
   /* 只读「意图」，不建 AudioContext：初始 state 里建 ctx 不在手势栈里，
      Chrome 会告警并把它挂成 suspended。引擎留给第一次真实点击去建。 */
   const [on, setOn] = useState(readSoundPref)
+
+  /**
+   * 跟着 localStorage 的真实值走。
+   *
+   * 为什么需要：开发者版的调试条（`DevBar`）里点任意一个音会顺手把声音打开
+   * （点音效 = 要听）。如果这里不跟着同步，就会出现**左上角显示「声音关」
+   * 而音效确实在响** —— 两个控件各说一套，比不显示还糟。
+   * 正式产物里 DevBar 整块被摇掉，这个监听是个空转的订阅，没有代价。
+   */
+  useEffect(() => {
+    const sync = () => setOn(readSoundPref())
+    window.addEventListener('tarot:sound-changed', sync)
+    return () => window.removeEventListener('tarot:sound-changed', sync)
+  }, [])
 
   const toggle = () => {
     const next = !on
