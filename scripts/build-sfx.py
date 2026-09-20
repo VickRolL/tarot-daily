@@ -19,7 +19,21 @@ aisounds.cn（ElevenLabs 引擎）产出的素材有三个通病，逐个有对�
      判据用**质心**：滤波后质心必须显著上移，否则视为「救失败」仍报 FAIL。
 
   ③ **响度不一**：四段素材 RMS 各不相同，直接播会一段炸一段听不见。
-     → RMS 归一到各自目标（-14 dBFS 附近），峰值顶到 -1.5 dBFS 封顶。
+     → RMS 归一到各自目标（-14 dBFS 附近），峰值顶到天花板（见 PEAK_CEILING_DB）。
+
+    这一步 2026-09-20 推翻重做过一次，教训值得留着：
+      · **峰值受限时，RMS 有数学上界**。flip 是「很轻的床体 + 一记 6ms 爆裂」，
+        0.77% 的样本占掉 4.83dB 能量；峰值钉在天花板时它的 RMS 上界只有 -17.3dB，
+        离 -14dB 差 3.3dB —— **靠限幅永远到不了**。
+        所以先量上界，再决定「要不要为响度付失真」，别对着一个够不到的目标反复调参。
+      · 到不了就只能要么**接受偏差**、要么**引入失真**（软削顶）。这里选了后者，
+        但**逐素材决定**（SPECS[*].clip）：宽频噪声瞬态被饱和听着像「响了一点」，
+        有音高的起音被饱和就变成闷响 —— 不能一条全局规则套所有素材。
+      · 我在这中间写过一版 4:1 downward compressor，注释声称它救了 flip。**那是假的** ——
+        它的峰值包络是 3ms 慢起音，单样本尖峰只把包络顶起 0.75%，根本进不了阈值。
+        删掉它换成显式软削顶后，失真量变成可审计的数字（被削样本占比）。
+      · **判据要落在 mp3 解码结果上**，不是编码前 PCM：64kbps 单声道有 0.4~0.7dB
+        的固有衰减，拿 PCM 去对目标会为了「数字好看」而过推响度。
 
 为什么每段一个 `--only` 而不是一次全跑：素材是分批到货的（限流），
 到一段处理一段；已处理的跳过不覆盖，重复跑安全。
@@ -39,6 +53,7 @@ aisounds.cn（ElevenLabs 引擎）产出的素材有三个通病，逐个有对�
 import argparse
 import json
 import os
+import re
 import sys
 
 import numpy as np
@@ -64,18 +79,27 @@ except ImportError:
 #            低频占比 0.94，是真的泥）。burst/flip/reveal 本来就是亮音，
 #            硬套同一道门槛会**假失败** —— 「只在特定素材上成立的门槛，
 #            不能无差别套到所有素材」，这个坑在塔罗项目里已经踩过一次。
-#   trim     播放增益补偿（写进 sfx.js 的 TRIM，报告里带出去人工核对）
+#   clip     是否允许用**软削顶**换响度（见 normalize 的说明）。
+#            默认 False：削顶改音色，值不值得要逐素材判断。
+#            只有 flip 开了 —— 它的峰值系数 28.5dB，纯限幅的响度上界只有 -17.3dB，
+#            离 -14dB 差太远，会「听不见」；而被削的是宽频噪声瞬态，饱和听感可接受。
+#   trim     播放增益补偿，写进 sfx.js 的 TRIMS（两处必须一致，main() 有对拍检查）。
+#            **默认 1.0**：流水线已经把每个音在文件里归到各自 rms 目标，
+#            这里再乘一个数就是「二次补偿」，反而把响度对齐破坏掉。
+#            ⚠️ charge 曾经是 1.4，注释写「补回高通削掉的电平」—— 但那个电平
+#            已经被 normalize() 补过一次了，于是 charge 悄悄比其它三个响 2.9dB。
+#            2026-09-20 修正为 1.0。
 SPECS = {
     # 参数是扫出来的（180~360Hz × 2~3 级联，见 2026-09-20 会话记录）：
     # 240Hz×2 是「质心 623Hz / 低频占比 0.57」与「别滤成薄片」的平衡点；
     # passes=3 时峰值系数恶化到 ~20dB，同样响度下动态被压得没法听。
-    'charge': {'target': 1.0, 'hpf': 240, 'passes': 2, 'rms': -14.0, 'fade_out': 0.08, 'trim': 1.4, 'rescue': True},
-    'burst':  {'target': 1.5, 'hpf': 90,  'passes': 2, 'rms': -13.0, 'fade_out': 0.12, 'trim': 1.0, 'rescue': False},
-    'flip':   {'target': 1.5, 'hpf': 120, 'passes': 2, 'rms': -14.0, 'fade_out': 0.10, 'trim': 1.0, 'rescue': False},
+    'charge': {'target': 1.0, 'hpf': 240, 'passes': 2, 'rms': -14.0, 'fade_out': 0.08, 'trim': 1.0, 'rescue': True,  'clip': False},
+    'burst':  {'target': 1.5, 'hpf': 90,  'passes': 2, 'rms': -13.0, 'fade_out': 0.12, 'trim': 1.0, 'rescue': False, 'clip': False},
+    'flip':   {'target': 1.5, 'hpf': 120, 'passes': 2, 'rms': -14.0, 'fade_out': 0.10, 'trim': 1.0, 'rescue': False, 'clip': True},
     # ⚠️ 合同写的是 5 秒，实际生成的是 **4 秒** —— 账户余额只够 4 秒（20 点/秒）。
     #    差的那 1 秒在这条音里是「余韵尾巴」，4 秒的落点依然成立；
     #    等以后有点数可以重生成 5s 覆盖，脚本无需改。
-    'reveal': {'target': 4.0, 'hpf': 60,  'passes': 1, 'rms': -14.0, 'fade_out': 0.50, 'trim': 1.0, 'rescue': False},
+    'reveal': {'target': 4.0, 'hpf': 60,  'passes': 1, 'rms': -14.0, 'fade_out': 0.50, 'trim': 1.0, 'rescue': False, 'clip': False},
 }
 
 RAW_DIR = os.path.join('audio-src', 'sfx', '_raw')
@@ -83,6 +107,13 @@ OUT_DIR = os.path.join('src', 'assets', 'audio', 'sfx')
 REPORT = os.path.join('scripts', 'out', '_sfx_build.json')
 
 SR = 44100
+
+# 峰值天花板（dBFS）。**这是免费余量，别浪费**：
+#   写 -1.5 是「给 mp3 编码器留足余量」的老习惯，但本站总线增益
+#   `MASTER_GAIN = 0.34`（engine.js，-9.4dB），素材峰值到 +1dBFS 也不会削波。
+#   天花板每抬 1dB，限幅要付出的响度代价就少 1dB —— charge/burst/reveal 都因此直接达标。
+#   -0.3 仍给编码器留了 0.3dB（mp3 解码会有少量 inter-sample 过冲）。
+PEAK_CEILING_DB = -0.3
 
 
 def db(x):
@@ -148,14 +179,160 @@ def fit_duration(a, target, fade_out):
     return a
 
 
-def normalize(a, rms_target_db, peak_ceiling_db=-1.5):
-    """RMS 归一 + 峰值封顶。两个约束取更严的那个。"""
-    rms = float(np.sqrt(np.mean(a ** 2)))
-    peak = float(np.abs(a).max())
-    g_rms = (10 ** (rms_target_db / 20)) / max(rms, 1e-9)
-    g_peak = (10 ** (peak_ceiling_db / 20)) / max(peak, 1e-9)
-    g = min(g_rms, g_peak)
-    return a * g, db(g)
+def limit_peaks(a, ceiling_db=-1.5, look_ms=20.0, release_ms=120.0):
+    """峰值限幅器：**只压尖峰，不动整体响度**。
+
+    为什么必须有限幅这一步（2026-09-20 实测踩到）：
+      归一那一步如果写成「RMS 增益与峰值增益取更严的那个」，遇到**峰值系数大**的
+      素材就会整体降增益 —— flip 的床体只有 -25~-34dB，却有一个 -11dB 的孤立瞬态
+      （峰值系数 28.5dB），于是它被压到 **RMS -30.6dB**，比 charge 低 16dB，
+      在页面上几乎听不见。而 README 里明写着「有的音听不见、有的音吓人」是要避免的。
+
+    做法：峰值跟随包络（瞬时起、指数落）→ 增益 g = min(1, ceil/env) →
+    **对 g 做前视滑动最小值**（不是滑动平均！）→ 乘上去。
+
+    ⚠️ 前视必须用「最小值」而不是「平均」—— 这一条是第二轮才修对的：
+      平均会把尖峰处的削减量抹平，于是**尖峰照样越界**；我最初的兜底是
+      「还剩越界就整体线性收一下」，结果整体被收了 9dB，
+      flip 的 RMS 变成 -28.4dB（离目标 14dB）——
+      等于绕一圈又把「整体降增益」请了回来。滑动最小值天然满足
+      `gain ≤ ceil/|x|`，只在尖峰邻域压，别处一律 1.0。
+    """
+    ceil = 10 ** (ceiling_db / 20)
+    aa = np.abs(a)
+    rel = float(np.exp(-1.0 / max(1.0, SR * release_ms / 1000.0)))
+    env = np.empty_like(aa)
+    prev = 0.0
+    for i in range(len(aa)):
+        v = aa[i]
+        prev = v if v > prev * rel else prev * rel
+        env[i] = prev
+    gain = np.minimum(1.0, ceil / np.maximum(env, 1e-9))
+
+    # 前视滑动最小值：窗口内取最严的削减量，保证峰值一定不越界
+    w = max(1, int(SR * look_ms / 1000))
+    n = len(gain)
+    if w > 1:
+        gmin = gain.copy()
+        for k in range(1, min(w, n)):
+            gmin[: n - k] = np.minimum(gmin[: n - k], gain[k:])
+        gain = gmin
+    return a * gain
+
+
+def soft_clip(a, c_db):
+    """tanh 软削顶：把超过 c 电平的部分圆滑地压下去（拐点是圆的，不是折的）。
+
+    为什么需要它 —— 2026-09-20 实测算出来的「响度上界」：
+      flip 是「很轻的床体 + 一记短促爆裂」，峰值系数 28.5dB。
+      0.77% 的样本（约 6ms）就占了 4.83dB 的能量。
+      **峰值钉在 -1.5dBFS 时，RMS 有数学上界**（逐样本硬削顶就取到上界）：
+      flip 的上界只有 -17.33dB，离 -14dB 目标差 3.3dB —— 靠限幅**永远到不了**。
+      要到 -14dB，唯一的路是「在更低电平处削顶、再整体提增益」，
+      而那就必然引入失真。既然失真不可避免，就选**圆滑**的那种：
+      tanh 在宽频噪声瞬态上听感接近「饱和」，硬削顶则是「数码碎裂」。
+
+    ★ 教训（写下来免得下轮又绕）：先量上界，再决定要不要为响度付失真。
+      我上一版在这里写了个 4:1 的 downward compressor，注释声称它救了 flip ——
+      **那是假的**：它的峰值包络是 3ms 慢起音，单样本尖峰只把包络顶起 0.75%，
+      根本进不了阈值，12 组参数扫下来结果一模一样（-16.7~-16.9dB 纹丝不动）。
+      真实起作用的是「限幅 + 提增益」的迭代，而那个迭代等价于在 -2.2dBFS
+      附近做软削顶。所以现在把这件事**写成明码**：显式削顶、显式报失真量。
+    """
+    c = 10 ** (c_db / 20)
+    return c * np.tanh(a / c)
+
+
+def _rms(a):
+    return float(np.sqrt(np.mean(a ** 2)))
+
+
+def _limit_then_compensate(x, rms_target_db, ceiling_db, rounds=2):
+    """只限幅 + 复测补偿（不引入削顶失真）。
+
+    补偿循环是「提增益 → 再限幅」的迭代：quiet 段会被提到原始值之上、
+    响段被天花板压回 —— 最终收敛到「峰值 = 天花板」。这是**零显式失真**路径。
+    """
+    y = limit_peaks(x, ceiling_db)
+    for _ in range(rounds):
+        cur = db(_rms(y))
+        if abs(cur - rms_target_db) < 0.5:
+            break
+        y = limit_peaks(y * (10 ** ((rms_target_db - cur) / 20)), ceiling_db)
+    return y
+
+
+def _fit_soft_clip(x, rms_target_db, ceiling_db, iters=14):
+    """二分找「刚好够到目标响度」的最大 c（c 越大 = 削得越轻 = 失真越小）。
+
+    RMS 随 c 单调下降（削得越狠越响），所以可以直接二分。
+    返回 (处理后的样本, 实际用的 c dBFS, 被削样本占比)。
+    """
+    ceil_lin = 10 ** (ceiling_db / 20)
+    lo, hi = ceiling_db - 30.0, ceiling_db  # c 越小削得越狠、RMS 越高
+    best = None
+    for _ in range(iters):
+        mid = (lo + hi) / 2.0
+        z = soft_clip(x, mid)
+        pk = float(np.abs(z).max())
+        if pk > 0:
+            z = z * (ceil_lin / pk)  # 提到峰值刚好压天花板
+        d = db(_rms(z))
+        if best is None or abs(d - rms_target_db) < abs(best[1] - rms_target_db):
+            best = (mid, d, z.copy())
+        # ★ RMS 随 c **单调递减**（削得越狠越响）。所以：
+        #   d > target → c 给大了 → 往上界挪（lo = mid）
+        #   d < target → c 给小了 → 往下界挪（hi = mid）
+        # 上一版这两支写反了，结果二分收敛到「削得最狠」那一端，响度冲过头、
+        # 比纯限幅还差，于是被回退 —— 症状是「软削顶明明该生效却一直没生效」。
+        if d > rms_target_db:
+            lo = mid
+        else:
+            hi = mid
+    c_used, _, z = best
+    soft_frac = float(np.mean(np.abs(x) > 10 ** (c_used / 20)))
+    return z, c_used, soft_frac
+
+
+def normalize(a, rms_target_db, peak_ceiling_db=PEAK_CEILING_DB, allow_softclip=False,
+              trigger_db=1.0):
+    """RMS 归一 → 优先纯限幅；差得太多（>trigger_db）且该素材允许时，才软削顶。
+
+    返回 dict：
+      y / gain_db / pre_peak_db / path('limit'|'softclip') / soft_clip_db / soft_frac
+
+    **为什么先纯限幅**：限幅不改音色，能到就到。够不到（峰值系数大到
+    上界都不够用，见 soft_clip 的说明）才削顶，并且把削了多少报出来 ——
+    失真量必须是**可审计的数字**，不能藏在代码里。
+
+    `allow_softclip` 是**逐素材**的开关，默认关：
+      削顶会改音色，值不值得是**按素材**判断的，不是一条全局规则 ——
+      宽频噪声瞬态（flip 的纸牌摩擦）被饱和听感接近「响了一点」，
+      而**有音高**的起音（reveal 的颂钵）被饱和会变成「嗡」的一声闷响，
+      那就把音色弄坏了。所以 reveal 宁可靠抬天花板、也不削顶。
+    """
+    rms = _rms(a)
+    g = (10 ** (rms_target_db / 20)) / max(rms, 1e-9)
+    x = a * g
+    pre_peak = float(np.abs(x).max())
+
+    y = _limit_then_compensate(x, rms_target_db, peak_ceiling_db)
+    dev = abs(db(_rms(y)) - rms_target_db)
+    path, c_used, frac = 'limit', None, 0.0
+
+    if allow_softclip and dev > trigger_db:
+        z, c_used, frac = _fit_soft_clip(x, rms_target_db, peak_ceiling_db)
+        if abs(db(_rms(z)) - rms_target_db) < dev:
+            y, path = z, 'softclip'
+
+    return {
+        'y': y,
+        'gain_db': db(g),
+        'pre_peak_db': pre_peak,
+        'path': path,
+        'soft_clip_db': c_used,
+        'soft_frac': frac,
+    }
 
 
 def spectral_metrics(a, nfft=4096):
@@ -203,11 +380,30 @@ def build_one(name, spec, kbps):
         a = highpass(a, spec['hpf'], spec['passes'])
     a = trim_silence(a)
     a = fit_duration(a, spec['target'], spec['fade_out'])
-    a, gain_db = normalize(a, spec['rms'])
+    norm = normalize(a, spec['rms'], allow_softclip=spec.get('clip', False))
+    a = norm['y']
+    # 峰值系数（限幅前）= 归一后的峰值 - 目标 RMS。>18dB 说明有孤立尖峰，
+    # 这一步的数字是「限幅器/削顶器到底有没有在干活」的唯一证据。
+    crest_db = norm['pre_peak_db'] - spec['rms']
 
     size = encode_mp3(a, kbps, out)
     out_centroid, out_low = spectral_metrics(a)
     out_dur = len(a) / SR
+
+    # ── 回读校验：解码刚写出的 mp3，量**真正出厂**的那一份 ──────────────
+    # 为什么必须回读：上面所有指标算的都是编码前 PCM。mp3 是有损的，
+    # 解码后峰值可能过冲（inter-sample peak）、时长会带编码器补的静音帧。
+    # 「页面拿到的是 mp3，不是 PCM」—— 判据必须落在 mp3 上，否则是自欺。
+    #
+    # ⚠️ 量的时候**必须先剪掉编码器补的静音**：LAME 会在首尾塞约 2000 个
+    #    静音样本（解码时长 1.045s vs PCM 1.0s），不剪的话那 4% 静音会把
+    #    RMS 稀释掉约 0.2dB，再叠上编码本身的 0.3~0.4dB 衰减，会**误报**
+    #    「响度差 0.7dB」。同一个 trim_silence 阈值，两边的口径才对得上。
+    rt_raw = load(out)
+    rt = trim_silence(rt_raw)
+    rt_rms = db(_rms(rt))
+    rt_peak = db(float(np.abs(rt_raw).max())) if len(rt_raw) else -999.0
+    rt_dur = len(rt_raw) / SR
 
     # 「救泥」判据按素材分组（见 SPECS.rescue 的说明）：
     #   rescue=True  原始是泥 → 必须**真的被救上来**（质心 ≥1.5 倍 且 低频占比 <0.6）
@@ -229,9 +425,17 @@ def build_one(name, spec, kbps):
         'out_dur': round(out_dur, 2),
         'target_dur': spec['target'],
         'hpf': spec['hpf'],
-        'applied_gain_db': round(gain_db, 1),
+        'applied_gain_db': round(norm['gain_db'], 1),
+        'pre_limit_peak_db': round(norm['pre_peak_db'], 1),
+        'out_crest_db': round(crest_db, 1),
+        'path': norm['path'],
+        'soft_clip_db': None if norm['soft_clip_db'] is None else round(norm['soft_clip_db'], 1),
+        'soft_frac': round(norm['soft_frac'], 4),
         'out_peak_db': round(db(float(np.abs(a).max())), 1),
         'out_rms_db': round(db(float(np.sqrt(np.mean(a ** 2)))), 1),
+        'rt_dur': round(rt_dur, 3),
+        'rt_peak_db': round(rt_peak, 1),
+        'rt_rms_db': round(rt_rms, 1),
         'raw_centroid_hz': round(raw_centroid, 0),
         'out_centroid_hz': round(out_centroid, 0),
         'raw_low_ratio': round(raw_low, 2),
@@ -277,6 +481,18 @@ def main():
             f"   质心 {r['raw_centroid_hz']:.0f}Hz → {r['out_centroid_hz']:.0f}Hz  "
             f"低频占比 {r['raw_low_ratio']} → {r['out_low_ratio']}"
         )
+        print(
+            f"   峰值系数 {r['out_crest_db']:.1f}dB（限幅前峰值 {r['pre_limit_peak_db']:.1f}dBFS）  "
+            f"→ RMS {r['out_rms_db']:.1f}dB / 峰值 {r['out_peak_db']:.1f}dB  "
+            f"偏离目标 {abs(r['out_rms_db'] - spec['rms']):.1f}dB"
+        )
+        if r['path'] == 'softclip':
+            print(
+                f"   路径：软削顶 @ {r['soft_clip_db']:.1f}dBFS（被削样本 {r['soft_frac']*100:.2f}%）"
+                f" —— 峰值系数过大，纯限幅到不了目标，失真量已量化"
+            )
+        else:
+            print('   路径：纯限幅（零削顶失真）')
         print(f"   救泥判据：{'PASS' if r['PASS_rescued'] else 'FAIL 仍发闷，考虑重生成'}")
 
     results = [by_name[n] for n in SPECS if n in by_name]
@@ -287,9 +503,107 @@ def main():
     done = [n for n in have_raw if os.path.exists(os.path.join(OUT_DIR, f'{n}.mp3'))]
     print(f"\n素材 {len(have_raw)}/4 到货，成品 {len(done)}/4 就位：{done or '[]'}")
     rescue_fail = [r['name'] for r in results if not r['PASS_rescued']]
-    ok = len(rescue_fail) == 0
+
+    # ── 响度齐不齐 ────────────────────────────────────────────────────
+    # 四个音来自四次独立生成，**响度必须齐**，否则「有的音听不见、有的音吓人」。
+    # 判据按各自的目标算偏差，而不是四个绝对值互比（burst 的目标本来就高 1dB）。
+    #
+    # ★ 判据落在**解码后的 mp3** 上，不是编码前 PCM（2026-09-20 修正）：
+    #   实测 64kbps 单声道编码对素材有 0.4~0.7dB 的稳定衰减，这是有损格式的
+    #   固有代价、消不掉。若拿 PCM 去对目标，要么把门槛放宽到失去意义，
+    #   要么就得为了「让 PCM 好看」而过推响度 —— 而页面拿到的是 mp3。
+    #   所以：**判出厂的那一份**，门槛用耳朵能分辨的 1.0dB。
+    def loud_db(r):
+        return r.get('rt_rms_db', r['out_rms_db'])
+
+    devs = [(r['name'], round(abs(loud_db(r) - SPECS[r['name']]['rms']), 1)) for r in results]
+    loud_fail = [n for n, d in devs if d > 1.0]
+    print('响度偏离目标（解码后）：' + '  '.join(f'{n} {d}dB' for n, d in devs))
+    if loud_fail:
+        print(f'   ⚠️ 这些音没归到位（>1dB）：{loud_fail}')
+
+    ok = not rescue_fail and not loud_fail
+
+    # ── 时长够不够（只告警，不算失败）──────────────────────────────────
+    # fit_duration 只**截断**、不**拉伸** —— 素材比合同短时它无能为力：
+    # 拉伸会把音色弄坏（而且这条音的「起音形状」是设计的一部分）。
+    # 所以这里只提示，让人知道「这条比合同短，是生成结果的锅，不是处理的锅」。
+    short = [(r['name'], r['out_dur'], r['target_dur'])
+             for r in results if r['out_dur'] < r['target_dur'] - 0.05]
+    if short:
+        print('时长不足（素材本身比合同短，处理不改长度）：'
+              + '  '.join(f'{n} {d}s<{t}s' for n, d, t in short))
+
+    # ── 回读验收：mp3 解码后必须仍满足「不越界、时长不变、编码别乱来」──
+    # 判据落在 mp3 上（页面实际拿到的就是它）。三条都双向可判：
+    #   ① 峰值 > 0dBFS → mp3 解码过冲，播放端会硬削 → 失败
+    #   ② 解码 RMS 与编码前差 > 1.0dB → 编码把响度改了（正常 0.4~0.7dB）→ 失败
+    #   ③ 解码时长比 PCM 短 / 长出 0.1s 以上 → 编码器丢了或补了料 → 失败
+    rt_fail = []
+    for r in results:
+        if 'rt_peak_db' not in r:
+            continue  # 旧报告，本轮没重跑的项
+        if r['rt_peak_db'] > 0.0:
+            rt_fail.append(f"{r['name']} mp3 解码峰值 {r['rt_peak_db']}dB > 0（会硬削）")
+        shift = abs(r['rt_rms_db'] - r['out_rms_db'])
+        if shift > 1.0:
+            rt_fail.append(
+                f"{r['name']} 编码把响度改了 {shift:.1f}dB（解码 {r['rt_rms_db']} vs "
+                f"PCM {r['out_rms_db']}，正常 0.4~0.7dB）"
+            )
+        if r['rt_dur'] < r['out_dur'] - 0.01 or r['rt_dur'] > r['out_dur'] + 0.1:
+            rt_fail.append(
+                f"{r['name']} mp3 解码时长 {r['rt_dur']}s vs PCM {r['out_dur']}s"
+                f"（预期只多不少，且多出的是编码器 padding ≈0.045s）"
+            )
+    print('回读校验：' + ('  '.join(
+        f"{r['name']} {r['rt_rms_db']}dB/{r['rt_peak_db']}dB/{r['rt_dur']}s"
+        for r in results if 'rt_peak_db' in r) or '（无）'))
+    if rt_fail:
+        ok = False
+        print(f'   ⚠️ 回读不合格：{rt_fail}')
+
+    # ── 跨文件一致性：sfx.js 的 TRIMS 必须和 SPECS 一致 ────────────────
+    # 为什么值得一道检查：成品 mp3 和播放增益分居两地（这里 / sfx.js），
+    # 谁改了另一边不知道 → 页面上的响度就悄悄偏了，而且**构建、探针都不会报**。
+    # 这里改成读 sfx.js 的 TRIMS 字面量和 SPECS 对拍，一处不一致就红。
+    drift = check_sfx_trim_drift()
+    if drift:
+        ok = False
+        print(f'   ⚠️ sfx.js 的 TRIMS 与 SPECS 不一致：{drift}')
+
     print(f"ALL_PASS {str(ok).lower()}")
     return 0 if ok else 1
+
+
+SFX_JS = os.path.join('src', 'audio', 'sfx.js')
+
+
+def check_sfx_trim_drift():
+    """读 sfx.js 里的 `const TRIMS = {...}`，和 SPECS 的 trim 对拍。
+
+    返回不一致的说明列表（空列表 = 一致）。文件不存在则跳过（不算失败）。
+    """
+    if not os.path.exists(SFX_JS):
+        return []
+    with open(SFX_JS, 'r', encoding='utf-8') as f:
+        src = f.read()
+    m = re.search(r'const\s+TRIMS\s*=\s*\{([^}]*)\}', src)
+    if not m:
+        return [f'{SFX_JS} 里找不到 `const TRIMS = {{...}}` 字面量']
+    js = {}
+    for k, v in re.findall(r'(\w+)\s*:\s*([0-9.]+)', m.group(1)):
+        js[k] = float(v)
+    out = []
+    for name, spec in SPECS.items():
+        if name not in js:
+            out.append(f'{name} 在 sfx.js 缺失')
+        elif abs(js[name] - spec['trim']) > 1e-6:
+            out.append(f"{name} sfx.js={js[name]} vs SPECS={spec['trim']}")
+    for extra in js:
+        if extra not in SPECS:
+            out.append(f'{extra} 是 sfx.js 多出来的键')
+    return out
 
 
 if __name__ == '__main__':

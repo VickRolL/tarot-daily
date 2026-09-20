@@ -71,8 +71,14 @@ const assetUrls = import.meta.glob('../assets/audio/sfx/*.mp3', {
   eager: true
 })
 
-/** 素材增益配平（与 build-sfx.py 报告里的 trim 一致）。charge 被高通削了电平，靠它补回 */
-const TRIMS = { charge: 1.4, burst: 1.0, flip: 1.0, reveal: 1.0 }
+/**
+ * 素材增益配平（必须与 build-sfx.py 的 SPECS[*].trim 一致，那边 main() 有对拍检查）。
+ *
+ * 默认全 1.0：流水线已经按 RMS 把四个音在**文件里**归到各自目标档，播放端再乘一个数
+ * 就是二次补偿，反而破坏响度对齐。历史上 charge 是 1.4（注释说「补回高通削掉的电平」），
+ * 但那部分已经被 normalize() 补过一次 —— 结果是 charge 悄悄比其它三个响 2.9dB。已修正。
+ */
+const TRIMS = { charge: 1.0, burst: 1.0, flip: 1.0, reveal: 1.0 }
 
 /** 只认四个合同内的名字——目录里混进别的文件不生效 */
 const ASSETS = {}

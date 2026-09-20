@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>塔罗四音 · 试听台</title>
+<style>
+  :root { color-scheme: dark; }
+  body {
+    margin: 0; padding: 34px 22px 60px;
+    background: radial-gradient(circle at 50% 0%, #1b1730 0%, #0b0912 62%);
+    color: #e8e4f4;
+    font: 15px/1.6 "Noto Serif SC", "Songti SC", serif;
+  }
+  h1 { font-size: 20px; font-weight: 700; letter-spacing: .12em; margin: 0 0 6px; }
+  .sub { color: #8f88a8; font-size: 13px; margin-bottom: 26px; }
+  .sub b { color: #cfc7e6; }
+  .row {
+    display: grid; grid-template-columns: 96px 1fr auto; gap: 14px; align-items: center;
+    padding: 14px 16px; margin-bottom: 10px;
+    border: 1px solid #2b2544; border-radius: 12px;
+    background: linear-gradient(180deg, rgba(43,37,68,.42), rgba(20,17,33,.42));
+  }
+  .name { font-size: 16px; letter-spacing: .08em; }
+  .name small { display: block; color: #8f88a8; font-size: 11.5px; letter-spacing: .04em; }
+  audio { width: 100%; height: 34px; }
+  .meta { color: #8f88a8; font-size: 12px; white-space: nowrap; text-align: right; }
+  .meta b { color: #cfc7e6; font-weight: 400; }
+  .seq {
+    margin: 22px 0 10px; padding: 14px 18px;
+    border: 1px solid #4a3f7a; border-radius: 12px;
+    background: linear-gradient(180deg, rgba(74,63,122,.3), rgba(20,17,33,.4));
+  }
+  button {
+    font: inherit; font-size: 14px; letter-spacing: .08em; color: #e8e4f4;
+    background: #2e2750; border: 1px solid #554a90; border-radius: 9px;
+    padding: 9px 20px; cursor: pointer;
+  }
+  button:hover { background: #3a3266; }
+  #log { margin-top: 12px; color: #8f88a8; font-size: 12.5px; min-height: 20px; }
+  .note { margin-top: 26px; color: #6f6889; font-size: 12.5px; max-width: 760px; }
+  .note b { color: #a89fd0; font-weight: 400; }
+</style>
+</head>
+<body>
+  <h1>四音试听台</h1>
+  <div class="sub">
+    四个音取自抽牌仪式的四拍。括号里是<b>合同要求的时长</b>，右边是<b>实际到货时长</b>。
+  </div>
+
+  <div class="row">
+    <div class="name">① 屏息<small>charge · 1 秒</small></div>
+    <audio controls preload="metadata" src="../src/assets/audio/sfx/charge.mp3"></audio>
+    <div class="meta" id="m-charge">—</div>
+  </div>
+  <div class="row">
+    <div class="name">② 雾散<small>burst · 1.5 秒</small></div>
+    <audio controls preload="metadata" src="../src/assets/audio/sfx/burst.mp3"></audio>
+    <div class="meta" id="m-burst">—</div>
+  </div>
+  <div class="row">
+    <div class="name">③ 丝绢<small>flip · 1.5 秒</small></div>
+    <audio controls preload="metadata" src="../src/assets/audio/sfx/flip.mp3"></audio>
+    <div class="meta" id="m-flip">—</div>
+  </div>
+  <div class="row">
+    <div class="name">④ 颂钵<small>reveal · 5 秒</small></div>
+    <audio controls preload="metadata" src="../src/assets/audio/sfx/reveal.mp3"></audio>
+    <div class="meta" id="m-reveal">—</div>
+  </div>
+
+  <div class="seq">
+    <button id="play">按仪式节拍连播（charge→burst→flip→reveal）</button>
+    <div id="log">节拍取自 audit-draw 的实测时间轴。</div>
+  </div>
+
+  <div class="note">
+    <b>怎么听</b>：连播是真实的四拍间距，判断标准不是「好不好听」，而是
+    「像不像这一场占卜该有的声音」—— 四个音都不能有明确音高的敲击感（「咚/嗒/咔」），
+    也不能有低频轰响；揭晓那声要「嗡」起来，不是「叮」一下。
+    <br><br>
+    <b>响度已配平</b>：这一页放的是<b>站点里真正在用的那四个文件</b>，
+    播放增益全为 1.0，所以这里听到的相对音量就是页面上的相对音量。
+    四个音解码后 RMS 落在 -14.7 / -13.6 / -14.5 / -14.7 dB 一档（burst 按设计高 1dB）。
+    <br><br>
+    <b>已知取舍</b>：reveal 只生成了 4 秒（余额限制），比合同短 1 秒；
+    burst 与 flip 实际到货也是 1.0 秒（合同 1.5），<b>素材本身短，处理不拉伸</b>。
+    flip 的「床体极轻 + 一记短促爆裂」峰值系数 28.5dB，纯限幅的响度上界只有 -17.3dB，
+    所以它在 -5.5dBFS 处做了软削顶（1.44% 样本）才进到同一档 —— 听的时候留意那一声
+    有没有变得发毛发刺。如果听着不对，改提示词重生成 + 重跑
+    <code>scripts/build-sfx.py</code> 即可，代码无需改动。
+  </div>
+
+<script>
+  const files = ['charge', 'burst', 'flip', 'reveal']
+
+  /* 显示实际时长/体积，方便和合同对照 */
+  files.forEach((n) => {
+    const a = document.querySelector(`audio[src*="${n}.mp3"]`)
+    if (!a) return
+    a.addEventListener('loadedmetadata', () => {
+      const el = document.getElementById('m-' + n)
+      el.innerHTML = `<b>${a.duration.toFixed(2)}s</b>`
+    }, { once: true })
+  })
+
+  /* 连播：用各自的 Audio 对象，时刻按 audit-draw 实测的时间轴 */
+  const BEATS = [
+    { n: 'charge', at: 0 },
+    { n: 'burst', at: 1000 },
+    { n: 'flip', at: 3700 },
+    { n: 'reveal', at: 5010 }
+  ]
+  const log = document.getElementById('log')
+  let timers = []
+
+  document.getElementById('play').addEventListener('click', () => {
+    timers.forEach(clearTimeout)
+    timers = []
+    log.textContent = '连播中…'
+    BEATS.forEach((b) => {
+      const a = new Audio(`../src/assets/audio/sfx/${b.n}.mp3`)
+      a.volume = 1
+      timers.push(setTimeout(() => {
+        a.play().catch((e) => { log.textContent = '播放被浏览器拦了：' + e.message })
+        log.textContent = `t=${(b.at / 1000).toFixed(2)}s  ${b.n}`
+      }, b.at))
+    })
+    timers.push(setTimeout(() => { log.textContent = '连播结束。' }, BEATS[BEATS.length - 1].at + 4200))
+  })
+</script>
+</body>
+</html>
