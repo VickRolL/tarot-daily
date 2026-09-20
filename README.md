@@ -254,9 +254,17 @@ PY="C:/Users/29923/.workbuddy/binaries/python/envs/default/Scripts/python.exe"
 "$PY" scripts/preview_hero.py            # 不开浏览器，纯 Python 复现底板定位数学，合成主视觉预览
 "$PY" scripts/package_project.py         # 打包（--light 轻量包）
 
-# git / 快照校验（2026-09-19 起）
-git log --oneline                        # bb0ad52 = v1 基线（v2 动工前的完整状态）
-node scripts/verify_manifest.mjs <目录>   # 校验快照 zip 解出来的目录是否完好（传目标目录）
+# git / 快照（2026-09-19 起）
+git log --oneline                        # bb0ad52 = v1 基线
+git tag -l                               # v1 / v2 —— v2 = 四个音效全部定稿那一版
+
+# 校验快照 zip 解出来的目录是否完好（**两个包各核一次**）
+node scripts/verify_manifest.mjs <目录>                                  # 代码包
+node scripts/verify_manifest.mjs <目录> --manifest MANIFEST-art.sha256   # 素材包
+# 冻结 / 演练（v3 定稿后照这个来）
+"$PY" scripts/preflight_freeze_secrets.py                                # 先查密钥会不会被卷进包
+"$PY" scripts/freeze_snapshot.py --label v3 --date <日期>
+"$PY" scripts/verify_snapshot_restore.py --label v3 --date <日期>         # 换全新路径解出来真跑一遍
 
 # 无头截图 QA（零依赖，直接驱动本机已装的 Chrome/Edge）
 node scripts/shot.mjs http://127.0.0.1:5173/ assets/previews/screen.png --w 1600 --h 900 \

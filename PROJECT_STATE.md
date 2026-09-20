@@ -5,9 +5,11 @@
 > 未完成的工作看 **`NEXT_STEPS.md`**（含具体做法、优先级、成本与踩坑提醒）。
 > 每次有实质进展都要回来更新本文档的「当前阶段」与「变更日志」。
 
-最后更新：2026-09-21（第二十八轮：**③ flip 由用户试听后拍板定稿 `s2-50`**，
-已替换、重建、验收通过；顺手修掉一个「素材变小 → 打包器把它内联进 JS」的构建故障。
-详见 `NEXT_STEPS.md` §19）。
+最后更新：2026-09-21（第二十九轮：**v2 定稿存档** —— 用户认可四个音效，
+把当前版本存成第二版：`git tag v2` + 冻结快照 `_archive/v2-2026-09-21/` + 推送远端，
+并做了还原演练。冻结前体检揪出「快照会把 `.env.local` 烤进 zip」与
+「两个包的清单同名 → 只核到半个包却显示绿灯」两条静默故障，已修。
+详见 `NEXT_STEPS.md` §20）。
 
 > ### 音效现状：四个音全部定稿并在站点在用（③ 为用户拍板版）
 > ### ① charge · ② burst · ④ reveal 待用户耳朵最终确认；③ flip 已由用户选定 `s2-50`。
@@ -148,10 +150,12 @@ tarot-app/
 │                                  `.gitignore` 排除 `_debug`/`previews`/`card-styles`/`_archive`/`dist*`；
 │                                  `.gitattributes` 把 `.cmd` 标为**不做任何换行转换**，配套 `core.autocrlf=false`
 │                                  （2026-09-19 前是 `.cmd` ×3 + `dist-user/` + `dist-dev/`，已随离线通道移除）
-├─ _archive/                     🔒 **v1 冻结快照（只读保险，不是工作副本）**：本工程无版本控制，
-│                                  做破坏性改造前用 `scripts/freeze_snapshot.py` 封存。
-│                                  内有 `v1-2026-09-19/`（code 11.8 MB + art 104.2 MB 两个 zip + `SNAPSHOT.md` 清单）
-│                                  `_verify/` 是从 zip 解出来真跑过的验收副本 —— 见第 6 节第 27 条
+├─ _archive/                     🔒 **冻结快照（只读保险，不是工作副本）**：用 `scripts/freeze_snapshot.py` 封存。
+│                                  · `v1-2026-09-19/`  code 11.8 MB + art 104.2 MB 两个 zip + `SNAPSHOT.md`
+│                                  · `v2-2026-09-21/`  code  7.5 MB + art 111.6 MB 两个 zip + `SNAPSHOT.md`
+│                                    （v2 = 四个音效全部定稿的那一版，对应 `git tag v2`）
+│                                  每份的 `_verify*/` 是从 zip 解出来**真跑过**的验收副本 —— 见第 6 节第 27 条
+│                                  演练复现：`python scripts/verify_snapshot_restore.py --label v2 --date 2026-09-21`
 ├─ scripts/
 │   ├─ build_card_assets.py      素材后处理：去水印 → 抠透明底卡框 → 量几何 → 导出 WebP → 合成预览
 │   ├─ build_hero_assets.py      ⭐ 主视觉拆层素材后处理：背景镜像去水印 / 球抠白底 / 牌背缩放
@@ -192,11 +196,20 @@ tarot-app/
 │   │                              单声道（宽度由 engine.js 的立体声混响给，源用单声道省一半体积）+
 │   │                              ABR 编码（体积可预测）。`--probe` 只看指标不产出。
 │   │                              ⚠️ `lameenc.set_vbr()` 收的是**模式常量**（VBR_ABR 等），不是布尔值
-│   ├─ verify_manifest.mjs       ⭐ 按 `MANIFEST.sha256` 逐文件校验快照完整性（`node scripts/verify_manifest.mjs <目录>`）
-│   │                              —— 替代原先文档里那条五层转义的一行命令，见第 6 节第 31 条
+│   ├─ verify_manifest.mjs       ⭐ 按逐文件清单校验快照完整性。用法：
+│   │                              `node scripts/verify_manifest.mjs <目录>`（核代码包）
+│   │                              `node scripts/verify_manifest.mjs <目录> --manifest MANIFEST-art.sha256`（核素材包）
+│   │                              ⚠️ **两个包要各核一次**：两份清单必须不同名，同名会互相覆盖，
+│   │                              只核一次就会出现「只覆盖半个包、结果却是绿的」——v1 就是这样，v2 已改
+│   ├─ verify_snapshot_restore.py ⭐ **还原演练**：换全新路径解包 → 两份清单各核一次 → 借 node_modules →
+│   │                              用包内 `audio-src/sfx/_raw/` 重建音效 → `vite build`。
+│   │                              判据只有一条：**解出来能构建、素材能解码**（「zip 生成成功」不算）
 │   ├─ contact_sheet.py          总览拼版（22 张联络表，验收风格/边框一致性用）
-│   ├─ freeze_snapshot.py        ⭐ 冻结快照（「版本保险」，与 git **互补**）：产出 code / art 两个 zip + `SNAPSHOT.md`；
-│   │                              自检已从「`dist-user` 在不在」改为「关键文件齐不齐」（离线副本不再存在）
+│   ├─ freeze_snapshot.py        ⭐ 冻结快照（「版本保险」，与 git **互补**）：产出 code / art 两个 zip + `SNAPSHOT.md`。
+│   │                              收录判据 =「丢了会不会痛」：不可再生素材（含 `audio-src/` 音效源素材）
+│   │                              进包；`scripts/out/` 只留 `_exp/` 与 `_raw-backup-*/`（花过 API 额度的）。
+│   │                              ⚠️ 有**密钥硬闸**：收集结果一旦出现 `.env*` / `*.key` 就直接拒绝出包
+│   │                              （v1 冻结时 `.env.local` 还不存在，这条是 v2 前补的）
 │   └─ package_project.py        项目打包（完整包 / `--light` 轻量包；**不再含离线副本**）
 ├─ public/skins/<皮肤名>/        美术素材，按皮肤分目录
 │   ├─ hero-bg.webp              ✅ 已就位（v2 无球版：巫师双手托举、掌心留空）
@@ -1824,3 +1837,30 @@ APP_URL=http://127.0.0.1:4199/ "$N" scripts/run-flows.mjs audit-title audit-draw
   - **成品实测（现役四音）**：charge 1.045s / -17.1dB / -12.0dBFS ·
     burst 1.515s / -16.1dB / -3.3dBFS · **flip 0.522s / -18.0dB / -1.1dBFS** ·
     reveal 4.049s / -17.2dB / -3.1dBFS。
+
+### 第二十九轮 · v2 定稿存档（2026-09-21）
+
+用户认可四个音效后要求「上传这个版本作为第二版保存」→ 定成 **v2**。
+
+- **标签**：`v1` → `bb0ad52`（v1 基线）· `v2` → 本轮提交（四个音效定稿版）
+- **快照**：`_archive/v2-2026-09-21/` —— code 7.5 MB · art 111.6 MB ·
+  `SNAPSHOT.md`（构成 + 两份清单 + 两个 zip 的 sha256 + 关键文件指纹 + 还原步骤）
+- **远端**：`origin/main` 推送完成。此前 **R25~R28 的提交只在本地**（ahead 13），
+  也就是说线上那份一直是「还没有音效」的旧版本
+- **演练**：`scripts/verify_snapshot_restore.py`（新增，可复用）换全新目录解包 →
+  两份清单各核一次（合计 300+ 文件 / 0 不一致）→ 由包内 `_raw/` 重建音效（ALL_PASS）→ `vite build` 成功
+
+**冻结前体检抓到两条静默故障（都已修）**：
+
+1. **快照会把 `.env.local` 烤进 zip** —— `collect()` 把根目录散件一律收进代码包，
+   而 API key 正好在根目录。v1 冻结时该文件还不存在，是**两个版本之间新出现的口子**。
+   已加排除 + **硬闸**（收集结果出现密钥类文件即拒绝出包）。
+   并先验明 **key 从没进过 git**（扫遍 601 个对象 0 命中）—— 推送不可撤销，这条必须在推之前查。
+2. **两个包的清单同名**（都叫 `MANIFEST.sha256`）→ 解到同一目录互相覆盖，
+   在合并目录里核对只覆盖到**一个**包，**输出却是「✓ 全部一致」**。v1 就是这样。
+   已改成 `MANIFEST.sha256` / `MANIFEST-art.sha256`，校验脚本加 `--manifest`；
+   并做了反向验证（篡改 1 个 + 移走 1 个 → 精确判红）。
+
+**收录范围对齐**：新收 `audio-src/`（含 `sfx/_raw/` 四个 AI 音源 —— 旧规则只保住了成品没保住源素材）；
+`scripts/out/` 只留 `_exp/` 与 `_raw-backup-*/`（花过 API 额度的），其余日志截图全排。
+代码包从 577 个文件 / 58.6 MB 压到 7.5 MB（约 1/8）。

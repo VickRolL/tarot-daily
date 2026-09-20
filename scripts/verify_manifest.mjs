@@ -1,9 +1,15 @@
-/* 校验快照完整性：按 MANIFEST.sha256 逐文件核对 sha256
+/* 校验快照完整性：按逐文件清单核对 sha256
    ==========================================================================
-   用法（在解出来的 tarot-app/ 目录里跑，也就是 MANIFEST.sha256 所在的那一層）：
+   用法（在解出来的 tarot-app/ 目录里跑，也就是清单文件所在的那一层）：
 
-       node scripts/verify_manifest.mjs
+       node scripts/verify_manifest.mjs                                    # 核代码包
        node scripts/verify_manifest.mjs <其他目录>
+       node scripts/verify_manifest.mjs . --manifest MANIFEST-art.sha256   # 核素材包
+
+   为什么 `--manifest` 是必需的：两个 zip 都解到 `tarot-app/` 下，
+   而清单**必须两个包不同名**（代码包 `MANIFEST.sha256` / 素材包 `MANIFEST-art.sha256`）。
+   若同名会互相覆盖 → 合并目录里只能核到其中一个包，**而输出看起来是绿的**。
+   **两个包都要各核一次**，`node scripts/verify_manifest.mjs .` 只核了代码包。
 
    为什么写成一个脚本而不是文档里贴一行 node -e：
    那条命令要塞进「双引号 bash 串 → JSON → Python 模板 → .format() → markdown」
@@ -17,8 +23,23 @@ import fs from 'node:fs'
 import path from 'node:path'
 import crypto from 'node:crypto'
 
-const root = process.argv[2] || '.'
-const manifestPath = path.join(root, 'MANIFEST.sha256')
+const argv = process.argv.slice(2)
+let manifestName = 'MANIFEST.sha256'
+const positional = []
+for (let i = 0; i < argv.length; i++) {
+  if (argv[i] === '--manifest') {
+    manifestName = argv[++i]
+    if (!manifestName) {
+      console.error('✗ --manifest 后面要跟清单文件名')
+      process.exit(1)
+    }
+    continue
+  }
+  positional.push(argv[i])
+}
+
+const root = positional[0] || '.'
+const manifestPath = path.join(root, manifestName)
 if (!fs.existsSync(manifestPath)) {
   console.error(`✗ 找不到 ${manifestPath} —— 请在解出来的 tarot-app/ 目录里运行`)
   process.exit(1)
