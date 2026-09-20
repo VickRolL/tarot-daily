@@ -76,6 +76,23 @@ JOBS = {
 没有低频轰响、爆炸、冲击感。
 安静、空灵、圆润、有大厅混响。""" + COMMON,
     },
+    # ③ 翻牌。用户第二轮意见（2026-09-21）：
+    #   「效果是符合的，但是冗杂了点，听起来像在翻书，而翻牌要利落一点，
+    #     你这个听起来像翻了两三张牌」。
+    #   → **音色/方向不用动，要改的是「手势」**：现在这条是 1.0s 的连续沙沙，
+    #     实测 3 次起手（0.07 / 0.12 / **0.633**）、起手跨度 0.563s、高频(>4kHz)响 665ms
+    #     —— 最后一次起手落在整段 63% 的位置，听感就是「翻了一下，过半天又翻一下」。
+    #   → 新方向：**一次、短、快落**。所以时长从 1.5 契约改为 **0.5s**
+    #     （契约 1.5s 是「不许超」的上限，不是「必须撑满」；翻牌是一次事件，
+    #      不该像床垫一样铺满 1.5 秒。翻牌动画 flipAt→flipDone 有 1200ms，
+    #      下一拍 reveal 在 flipAt+1480ms，0.5s 留足余量）。
+    #   ★ 直连必须写英文（见下 TARGETS 顶部的实测结论）；短稿、只做正面描述。
+    'flip': {
+        'duration': 0.5,
+        'prompt': """A single crisp playing card flick: one quick, sharp snap of a card flipped
+over, bright and decisive, with a short papery flutter that ends at once.
+One flick only, fast and clean, over in a moment.""",
+    },
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -104,6 +121,28 @@ TARGETS = {
         'centroid_Hz': (250, 3000),   # 旧 8600Hz ← 蒸汽
         'high_gt4000': (0.0, 0.25),   # 旧 0.939 ← 同上
         'low_lt300': (0.06, 1.0),     # 旧 0.004 ← 没底子所以「飘、刺、吵」
+    },
+    # ③ flip：用户只否「手势」，没否音色（「效果是符合的」）—— 所以这里
+    #    **不设频谱硬约束**，只留两条宽松的护栏防止方向性跑偏（变成闷响 / 纯嘶声），
+    #    重点全部压在手势上。
+    #    反向验证的输入是**现有那条被否的素材**（音频文件没动过，直接拿来当反例）：
+    #      现有 raw: onset_span 0.563s / last_onset_ratio 0.633 / n_onset 3
+    #                duty 0.241 / crest 28.8dB / 质心 3746Hz
+    #      → 必须能把 onset_span（0.563 > 0.20）与 last_onset_ratio 判红。
+    'flip': {
+        # 「像翻了两三张牌」的直接量度：第一次起手到最后一次起手跨了多久。
+        # 一次动作 = 几十毫秒。上限取 0.20s：给「啪 + 一点点纸的颤」留足空间，
+        # 但把现有素材的 0.563s 判红。
+        'onset_span_s': (0.0, 0.20),
+        # 且动作必须挤在开头：最后一次起手不得晚于整段的 45%。
+        'last_onset_ratio': (0.0, 0.45),
+        # 能量不许铺满（持续沙沙 ≈ 1.0；一次动作远低于此）。
+        'duty_20': (0.0, 0.55),
+        # 瞬态感：峰值 − RMS。被压平的素材/成品会掉到 14dB 以下。
+        'crest_db': (16.0, 60.0),
+        # 护栏：保留「纸/卡」的宽频质感，但别变成闷响或纯嘶声。
+        'centroid_Hz': (600.0, 9500.0),
+        'high_gt4000': (0.02, 0.90),
     },
 }
 
@@ -250,6 +289,77 @@ def measure(path):
         # 频谱全绿但结尾静音 = 下一拍之前出现空档（charge 实测踩过，见 TARGETS 注释）。
         # ⚠️ burst **不要**给这条设下限 —— 雾散本来就该「铺开又消散」，尾段低是设计。
         'env_tail_db': round(_tail_db(x), 1),
+        **_gesture(x, sr),
+    }
+
+
+def _gesture(x, sr, win_ms=10.0, hop_ms=5.0, merge_s=0.05):
+    """手势指标：这个音是「一次干脆的动作」还是「一片持续的活动」。
+
+    ★ 2026-09-21 新增。起因是用户对 flip 的评价：
+      「效果是符合的，但是冗杂了点，听起来像在翻书……像翻了两三张牌」。
+      「利落」这个听感对应四个可量的东西：
+
+        n_onset          —— 有几次起手（谱通量的突出上升）
+        onset_span_s     —— **第一次起手到最后一次起手跨了多久**。这是「冗杂」的核心量度：
+                            一次动作只该跨几十毫秒；跨半秒就是「翻了两三张牌」
+        duty_20          —— 能量高于「峰值 -20dB」的时间占比。持续噪声 ≈ 1.0，一次动作 ≪ 1
+        crest_db         —— 峰值 − RMS。瞬态感的直接量度，低了就是被压平了
+
+    ⚠️ 别只看素材：这三条在**构建链的「RMS 归一 + 软削顶」那一步会被整体破坏**
+      （实测 crest 28.5→13.7dB、duty 0.29→0.89，见 `scripts/_ablate_flip.py` 的逐级消融）。
+      所以素材和成品**两边都要卡**。
+    """
+    if x.size == 0:
+        return {}
+    dur = len(x) / sr
+
+    # ── duty_20：逐帧能量（10ms 窗 / 5ms 跳）─────────────────────────────
+    win = max(1, int(sr * win_ms / 1000.0))
+    hop = max(1, int(sr * hop_ms / 1000.0))
+    n = 1 + max(0, (len(x) - win) // hop)
+    if n < 2:
+        return {}
+    e = np.empty(n)
+    for i in range(n):
+        s = x[i * hop:i * hop + win].astype(np.float64)
+        e[i] = (s ** 2).mean()
+    e_db = 10 * np.log10(np.maximum(e, 1e-20))
+    e_db -= e_db.max()
+
+    # ── 瞬态感 ───────────────────────────────────────────────────────────
+    rms = float(np.sqrt((x.astype(np.float64) ** 2).mean()))
+    pk = float(np.abs(x).max())
+    crest = 20 * np.log10(max(pk, 1e-12)) - 20 * np.log10(max(rms, 1e-12))
+
+    # ── 起手：谱通量 ─────────────────────────────────────────────────────
+    nfft, hop2 = 1024, 256            # 5.8ms 一跳
+    m = 1 + max(0, (len(x) - nfft) // hop2)
+    onsets = []
+    if m > 4:
+        w = np.hanning(nfft)
+        mags = np.empty((m, nfft // 2 + 1))
+        for i in range(m):
+            mags[i] = np.abs(np.fft.rfft(x[i * hop2:i * hop2 + nfft] * w))
+        nm = mags / (mags.max() or 1.0)
+        flux = np.maximum(np.diff(nm, axis=0), 0).sum(axis=1)
+        thr = flux.mean() + 2.0 * flux.std()
+        for i in range(len(flux)):
+            if flux[i] <= thr:
+                continue
+            t = (i + 1) * hop2 / sr
+            if onsets and t - onsets[-1] < merge_s:
+                continue
+            onsets.append(float(t))
+
+    return {
+        'crest_db': round(crest, 1),
+        'duty_20': round(float((e_db > -20.0).mean()), 3),
+        'n_onset': len(onsets),
+        # 起手跨度：一次动作该是几十毫秒
+        'onset_span_s': round(onsets[-1] - onsets[0], 3) if len(onsets) >= 2 else 0.0,
+        # 最后一次起手落在整段的哪个位置 —— 「动作是不是都挤在开头」
+        'last_onset_ratio': round(onsets[-1] / dur, 3) if onsets else 0.0,
     }
 
 
@@ -335,6 +445,11 @@ def main():
                 f'  {flag}  时长 {m["duration_s"]}s · 质心 {m["centroid_Hz"]}Hz · '
                 f'20-60Hz {m["sub_lt60"]:.3f} · 20-300Hz {m["low_lt300"]:.2f} · '
                 f'>4kHz {m["high_gt4000"]:.3f} · 尾段 {m["env_tail_db"]}dB'
+            )
+            print(
+                f'        手势：起手 {m.get("n_onset")} 次 · 跨度 {m.get("onset_span_s")}s · '
+                f'末次位置 {m.get("last_onset_ratio")} · 铺满 {m.get("duty_20")} · '
+                f'crest {m.get("crest_db")}dB'
             )
             if fails:
                 ok_all = False

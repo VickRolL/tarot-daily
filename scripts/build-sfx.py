@@ -52,6 +52,7 @@ aisounds.cn（ElevenLabs 引擎）产出的素材有三个通病，逐个有对�
 """
 
 import argparse
+import importlib.util
 import json
 import os
 import re
@@ -115,7 +116,21 @@ SPECS = {
     #   那是「厚」与「清」的取舍，属于耳朵的活，不是指标的活。
     'charge': {'target': 1.0, 'hpf': 100, 'passes': 1, 'rms': -14.0, 'fade_out': 0.08, 'trim': 1.0, 'rescue': False, 'clip': False},
     'burst':  {'target': 1.5, 'hpf': 90,  'passes': 2, 'rms': -13.0, 'fade_out': 0.12, 'trim': 1.0, 'rescue': False, 'clip': False},
-    'flip':   {'target': 1.5, 'hpf': 120, 'passes': 2, 'rms': -14.0, 'fade_out': 0.10, 'trim': 1.0, 'rescue': False, 'clip': True},
+    # ⚠️ flip 三处都改过（2026-09-21 第二十七轮），逐条给理由：
+    #
+    # 1) `target` 1.5 → **0.6**。1.5s 是**节拍余量的上限**（flipAt → panelAt 有 1480ms），
+    #    不是「必须撑满」。用户对旧 flip 的意见是「冗杂、像在翻书、像翻了两三张牌」——
+    #    而翻牌在听觉上是**一次事件**，不该像床垫一样铺满一秒多。新素材 0.6s。
+    #    ⚠️ 这个数同时被探针用作「不超拍」的合同值（build 会写进 _sfx_expect.js），
+    #       改它等于改契约，README 的表格要同步。
+    # 2) `rms` -14.0 → **-16.0**（有效目标 -18.5）。见 PEAK_CEILING_DB 上面那段：
+    #    按持续音的水位对齐这条 0.48~0.6s 的瞬态，会把它压成「一片沙沙」，
+    #    而且削顶到 3.3% 之后 mp3 编码过冲会冲破满刻度。下移 2.5dB 后：
+    #    削顶降到 2.13%、峰值系数回到 14.5dB、解码峰值 -2.58dBFS，
+    #    与另外三音的解码 RMS 极差 2.2dB（判据 ≤3dB）。
+    # 3) `ceiling` **-2.8 → -4.0**（逐音覆盖，见 _ceiling_of）。同样是过冲余量，
+    #    这是 `scripts/_tune_flip.py` 扫出来的落点，不是拍的。
+    'flip':   {'target': 0.6, 'hpf': 120, 'passes': 2, 'rms': -16.0, 'ceiling': -4.0, 'fade_out': 0.10, 'trim': 1.0, 'rescue': False, 'clip': True},
     # ⚠️ 合同写的是 5 秒，实际生成的是 **4 秒** —— 账户余额只够 4 秒（20 点/秒）。
     #    差的那 1 秒在这条音里是「余韵尾巴」，4 秒的落点依然成立；
     #    等以后有点数可以重生成 5s 覆盖，脚本无需改。
@@ -127,6 +142,33 @@ OUT_DIR = os.path.join('src', 'assets', 'audio', 'sfx')
 REPORT = os.path.join('scripts', 'out', '_sfx_build.json')
 
 SR = 44100
+
+
+def _load_gen_module():
+    """把 gen-sfx-elevenlabs.py 当模块载入（文件名带连字符，不能直接 import）。
+
+    ★ 2026-09-21 新增。为什么要 import 而不是抄一份：**手势量法只有一个来源**。
+      「起手几次 / 起手跨度 / 铺满度 / 峰值系数」这套指标同时用在两处 ——
+      生成阶段选素材（TARGETS['flip']）与构建阶段验收成品。抄成两份一定会漂，
+      而漂了之后两边给出的结论会互相矛盾，且**不会有任何东西报错**。
+      这正是本项目在「探针手抄合同时长」上踩过的坑的同一种形状。
+    """
+    here = os.path.dirname(os.path.abspath(__file__))
+    spec = importlib.util.spec_from_file_location(
+        'gen_sfx_gesture', os.path.join(here, 'gen-sfx-elevenlabs.py')
+    )
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+_GEN = _load_gen_module()
+
+# 「本来是一记动作」的素材，其铺满度远低于 0.5；持续型素材（床垫/雾）≈ 0.7~1.0。
+RAW_TRANSIENT_DUTY = 0.5
+# 成品允许的铺满度上限。与 gen 的 TARGETS['flip']['duty_20'] 上限同值 ——
+# 两处必须是同一个数，否则「素材合格但成品被判红」会变成一个说不清的状态。
+OUT_DUTY_CEIL = 0.55
 
 # 峰值天花板（dBFS）= **留给 mp3 编码器的余量**（2026-09-20 第二十五轮重新量化）。
 #
@@ -153,6 +195,31 @@ SR = 44100
 # 所以这只是**交付卫生**问题，不是可听故障 —— 但交付出去的文件不该过满刻度，
 # 那是一条独立的标准。
 PEAK_CEILING_DB = -2.8
+
+# ★ 2026-09-21（第二十七轮）新增：**天花板可以逐音覆盖**（SPECS[*].ceiling）。
+#
+# 起因：flip 换成新素材（一记干净的擦碰，crest 25.9dB）之后，按上面这套
+# 「全局 -2.8 + RMS 目标 -16.5」重建，python 侧回读报出 **3 个被钳在满刻度的样本**
+# —— 也就是出厂文件的解码峰值冲破了 0dBFS（浏览器侧会看到真正的过冲幅度）。
+#
+# 为什么这次不能靠「再降一点全局天花板」解决：
+#   天花板与 RMS 目标是**互相拉扯**的一对 —— 目标不动、只压天花板，
+#   等于要软削顶削得更狠；而**削得越狠 → 波形越密 → 编码过冲越大**，
+#   于是又得压天花板…… 见 `scripts/_tune_flip.py` 扫出来的那张表：
+#   ceiling -5.0 / -6.0 那两行的峰值系数掉到 11.5 / 10.5dB，音已经扁了。
+#   而且从表里能看出天花板并不单调地决定解码峰值。
+#
+# 真正起作用的是**响度目标**：flip 是 0.48s 的瞬态，把它按「整段 RMS」对齐到
+# 持续音的水位，需要 +13.7dB 增益再削掉 3.3% 的样本才能收住峰值 ——
+# 那是这个音变成「一片沙沙」的机制本身（见 build_one 里的手势守恒判据）。
+# 所以 flip 的目标下移到 -16.0（有效 -18.5），配合 ceiling -4.0：
+#   实测 解码 -18.3dB / 峰值 -2.58dBFS / crest 14.5dB / duty 0.176 / 削顶 2.13%
+#   —— 与另外三音的解码 RMS 极差 2.2dB，仍在 3dB 内。
+#
+# ⚠️ 逐音覆盖的**理由必须写在 SPECS 那一条上**，因为它是「这条音为什么可以不一样」
+#    的唯一记录。默认值仍然是全局 -2.8，不许悄悄各改各的。
+def _ceiling_of(spec):
+    return spec.get('ceiling', PEAK_CEILING_DB)
 
 # 因为天花板下移了，四个音的 rms 目标**必须同步下移同样的量**：
 # 这样「峰值到天花板的距离」「限幅器压多少」「软削顶削多少」**逐位不变**，
@@ -426,6 +493,9 @@ def build_one(name, spec, kbps):
     a = load(raw)
     raw_dur = len(a) / SR
     raw_centroid, raw_low = spectral_metrics(a)
+    # 素材的「手势」（2026-09-21）：用来在成品侧判断「这道流水线有没有把它压平」。
+    # 素材侧的其他手势量（起手次数/跨度）在生成阶段就卡过了，这里只需要铺满度与峰值系数。
+    g_raw = _GEN._gesture(np.array(a, dtype=np.float32), SR)
 
     if spec['hpf']:
         a = highpass(a, spec['hpf'], spec['passes'])
@@ -433,7 +503,9 @@ def build_one(name, spec, kbps):
     a = fit_duration(a, spec['target'], spec['fade_out'])
     # 见 TARGET_SHIFT_DB 的说明：目标是「设计值 + 编码余量偏移」，只在这一处算
     rms_target = spec['rms'] + TARGET_SHIFT_DB
-    norm = normalize(a, rms_target, allow_softclip=spec.get('clip', False))
+    ceiling = _ceiling_of(spec)
+    norm = normalize(a, rms_target, peak_ceiling_db=ceiling,
+                     allow_softclip=spec.get('clip', False))
     a = norm['y']
     # 峰值系数（限幅前）= 归一后的峰值 - 目标 RMS。>18dB 说明有孤立尖峰，
     # 这一步的数字是「限幅器/削顶器到底有没有在干活」的唯一证据。
@@ -480,6 +552,31 @@ def build_one(name, spec, kbps):
     else:
         rescued = out_centroid >= raw_centroid * 0.9
 
+    # ── 手势守恒：「本来是一记动作」的素材不许被流水线填成一片 ────────────
+    # ★ 2026-09-21 新增。直接起因是用户对 flip 的评价「像在翻书」。
+    #   逐级消融（scripts/_ablate_flip.py）证明这不是素材的锅：
+    #     素材 duty 0.24 / crest 28.5dB → 高通·去静音·对齐时长都不动它
+    #     → **RMS 归一那一步**变成 duty 0.84 / crest 15.5dB，
+    #       听感从「一次擦碰」变成「一片沙沙」。
+    #   机制：素材 RMS 极低（-33.5dB）是因为**大部分时间它是静音**，
+    #   为了凑 RMS 目标要拉 +16.9dB；峰值必然越界，于是软削顶把空隙全填上。
+    #   → 判据：素材铺满度 < 0.5（= 一次动作型）时，成品铺满度不得 > 0.55，
+    #     且峰值系数不得掉到 12dB 以下（掉了就是被压平）。
+    #   反向验证：旧 flip 素材 0.241 → 成品 0.836，判红；新素材 0.042 → 0.204，判绿。
+    g_out = _GEN._gesture(np.array(a, dtype=np.float32), SR)
+    transient_src = g_raw.get('duty_20', 1.0) < RAW_TRANSIENT_DUTY
+    fill_ok = True
+    fill_why = ''
+    if transient_src:
+        if g_out.get('duty_20', 0.0) > OUT_DUTY_CEIL:
+            fill_ok = False
+            fill_why = (f'素材铺满度 {g_raw["duty_20"]}（一次动作型）→ 成品 '
+                        f'{g_out["duty_20"]}，被归一/削顶填平了（上限 {OUT_DUTY_CEIL}）')
+        elif g_out.get('crest_db', 99.0) < 12.0:
+            fill_ok = False
+            fill_why = (f'成品峰值系数只剩 {g_out["crest_db"]}dB（素材 '
+                        f'{g_raw.get("crest_db")}dB），瞬态被压平')
+
     return {
         'name': name,
         'src': raw,
@@ -489,6 +586,13 @@ def build_one(name, spec, kbps):
         'raw_dur': round(raw_dur, 2),
         'out_dur': round(out_dur, 2),
         'target_dur': spec['target'],
+        'raw_duty': g_raw.get('duty_20'),
+        'out_duty': g_out.get('duty_20'),
+        'raw_crest_gesture_db': g_raw.get('crest_db'),
+        'out_crest_gesture_db': g_out.get('crest_db'),
+        'transient_src': transient_src,
+        'PASS_not_filled': fill_ok,
+        'fill_why': fill_why,
         'hpf': spec['hpf'],
         'applied_gain_db': round(norm['gain_db'], 1),
         'pre_limit_peak_db': round(norm['pre_peak_db'], 1),
@@ -595,6 +699,7 @@ def main():
     done = [n for n in have_raw if os.path.exists(os.path.join(OUT_DIR, f'{n}.mp3'))]
     print(f"\n素材 {len(have_raw)}/4 到货，成品 {len(done)}/4 就位：{done or '[]'}")
     rescue_fail = [r['name'] for r in results if not r['PASS_rescued']]
+    fill_fail = [r for r in results if not r.get('PASS_not_filled', True)]
 
     # ── 响度齐不齐 ────────────────────────────────────────────────────
     # 四个音来自四次独立生成，**响度必须齐**，否则「有的音听不见、有的音吓人」。
@@ -619,7 +724,17 @@ def main():
     if loud_fail:
         print(f'   ⚠️ 这些音没归到位（>1dB）：{loud_fail}')
 
-    ok = not rescue_fail and not loud_fail
+    ok = not rescue_fail and not loud_fail and not fill_fail
+
+    # ── 手势守恒（见 build_one 的说明）─────────────────────────────────
+    print('手势守恒（铺满度 duty / 峰值系数 crest）：'
+          + '  '.join(
+              f"{r['name']} {r.get('raw_duty')}→{r.get('out_duty')} / "
+              f"{r.get('raw_crest_gesture_db')}→{r.get('out_crest_gesture_db')}dB"
+              + ('' if r.get('transient_src') else '(持续型,免检)')
+              for r in results))
+    for r in fill_fail:
+        print(f"   ⚠️ {r['name']}：{r['fill_why']}")
 
     # ── 时长够不够（只告警，不算失败）──────────────────────────────────
     # fit_duration 只**截断**、不**拉伸** —— 素材比合同短时它无能为力：

@@ -65,16 +65,40 @@ _TMPL_BURST_HZ = ('A soft warm misty swell of about {hz} Hz spreading out and sl
 
 
 def build_candidates():
+    """返回 {name: [(tag, influence, prompt[, duration]), ...]}
+
+    带第 4 个元素时覆盖该候选的时长（用于同时试不同时长）。
+    """
     return {
         'charge': [],
-        # burst 1.5s 的第二轮：上一轮的三条（1.2s 的 en-0.7 是 1254Hz）说明
-        # **时长拉长会把质心压暗**（1.5s 的两条只有 218/326Hz、92% 能量在 300Hz 以下）。
-        # 这轮按 charge 验证过有效的办法（**把目标频率写进稿子**）把质心往上要，
-        # 目标是「契约长度 1.5s」与「有中频质感」兼得 —— 太暗会像闷响，不像雾。
-        'burst': [
-            ('L15-400', 0.7, _TMPL_BURST_HZ.format(hz=400)),
-            ('L15-700', 0.7, _TMPL_BURST_HZ.format(hz=700)),
-            ('L15-1000', 0.7, _TMPL_BURST_HZ.format(hz=1000)),
+        'burst': [],
+        # ★ v5（flip）：用户第二轮意见 ——「冗杂、像翻书、像翻了两三张牌」。
+        #   现有素材实测：起手 3 次、跨度 0.563s、末次落在 63% 位置、高频响 665ms。
+        #   三条稿子都在做同一件事：**把动作压成一次、并让它立刻结束**。
+        #   措辞差异是有意为之（上一轮的教训：模型会照字面执行名词）：
+        #     s1 用 "flick / flutter"（名词驱动，最接近现有音色）
+        #     s2 用 "snap"（更硬、更短，可能偏「咔」）
+        #     s3 用 "over in a moment"（用时长意图直接约束）
+        #   另外同时铺 0.5s / 0.6s 两档时长，看模型对时长的响应。
+        'flip': [
+            ('s1-50', 0.7,
+             'A single crisp playing card flick: one quick, sharp snap of a card flipped '
+             'over, bright and decisive, with a short papery flutter that ends at once. '
+             'One flick only, fast and clean, over in a moment.', 0.5),
+            ('s2-50', 0.7,
+             'A snappy card flip: one short, tight, crisp snap of a single playing card '
+             'turning over quickly, bright paper texture, sharp attack, the tail stops '
+             'at once.', 0.5),
+            ('s3-50', 0.7,
+             'One sharp card flip, clean and quick: the crisp snap of a single playing '
+             'card flicked over, bright and tight, over in a moment.', 0.5),
+            ('s1-60', 0.7,
+             'A single crisp playing card flick: one quick, sharp snap of a card flipped '
+             'over, bright and decisive, with a short papery flutter that ends at once. '
+             'One flick only, fast and clean, over in a moment.', 0.6),
+            ('s3-60', 0.7,
+             'One sharp card flip, clean and quick: the crisp snap of a single playing '
+             'card flicked over, bright and tight, over in a moment.', 0.6),
         ],
     }
 
@@ -158,10 +182,12 @@ def run(names):
         dur = G.JOBS[name]['duration']
         print(f'\n================ {name}  {dur}s  目标 {G.TARGETS[name]}')
         rows = []
-        for tag, infl, prompt in cands[name]:
+        for cand in cands[name]:
+            tag, infl, prompt = cand[0], cand[1], cand[2]
+            cdur = cand[3] if len(cand) > 3 else dur
             out = os.path.join(OUT, f'{name}--{tag}.mp3')
-            print(f'  → {tag} (influence {infl}) …')
-            data, cost = G.generate(key, prompt, dur, infl)
+            print(f'  → {tag} (influence {infl}, {cdur}s) …')
+            data, cost = G.generate(key, prompt, cdur, infl)
             with open(out, 'wb') as f:
                 f.write(data)
             m = G.measure(out)
@@ -170,6 +196,7 @@ def run(names):
                 continue
             m['tag'] = tag
             m['influence'] = infl
+            m['req_dur'] = cdur
             m['cost'] = cost
             m['fails'] = G.check(name, m)
             m['score'] = round(score(name, m), 4)
@@ -177,9 +204,10 @@ def run(names):
                 json.dump(m, f, ensure_ascii=False, indent=2)
             rows.append(m)
             flag = 'PASS' if not m['fails'] else 'FAIL'
-            print(f'    {flag} 质心 {m["centroid_Hz"]:>8}Hz · 20-60Hz {m["sub_lt60"]:.3f} · '
-                  f'20-300Hz {m["low_lt300"]:.2f} · >4kHz {m["high_gt4000"]:.3f} · '
-                  f'尾段 {m.get("env_tail_db")}dB · '
+            print(f'    {flag} 时长 {m["duration_s"]}s · 质心 {m["centroid_Hz"]:>7}Hz · '
+                  f'>4kHz {m["high_gt4000"]:.3f} · 铺满 {m.get("duty_20")} · '
+                  f'crest {m.get("crest_db")}dB · 起手 {m.get("n_onset")} 次 / '
+                  f'跨度 {m.get("onset_span_s")}s / 末次 {m.get("last_onset_ratio")} · '
                   f'偏离分 {m["score"]} · 计费 {cost}')
             for f_ in m['fails']:
                 print(f'       ⚠️ {f_}')
@@ -201,7 +229,8 @@ def run(names):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('--only', nargs='+', choices=['charge', 'burst'], default=['charge', 'burst'])
+    ap.add_argument('--only', nargs='+', choices=['charge', 'burst', 'flip'],
+                    default=['charge', 'burst', 'flip'])
     ap.add_argument('--recheck', action='store_true', help='零成本：回测旧素材，验证判据可比性')
     args = ap.parse_args()
     if args.recheck:

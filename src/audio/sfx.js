@@ -128,21 +128,53 @@ const round1 = (x) => Math.round(x * 10) / 10
  *
  * 结果缓存：`window.__tarotSfx` 是个 getter，探针的 waitFor 会轮询读它，
  * 放进去现算会让同一段 4 秒音频被反复扫几十遍。
+ *
+ * ★ 2026-09-21 修正：RMS 要在**剪掉首尾近静音**之后再算，与 `build-sfx.py`
+ *   的 `trim_silence(-55dB)` 同一口径。原来这里是把整段（含编码器补的静音尾巴、
+ *   以及素材自己那截 -60dB 的余韵）一起算进 RMS —— 对密集的音（charge / burst /
+ *   reveal，整段都在响）几乎没差别，所以一直没暴露；换成稀疏的 flip 之后立刻显形：
+ *   同一条文件**流水线报 -18.3dB、浏览器报 -19.1dB，差 0.8dB**，直接打红
+ *   `probe-sfx` 的漂移判据，而代码、产物都没问题。
+ *   两个数都不是错的，**它们是两个不同的量**。判据要能用，两边必须是同一个量：
+ *   把听不见的静音算进「响度」本身就没有意义，所以对齐到剪过的那个。
+ *   （峰值不受影响：最大值剪不剪都一样。）
  */
+const TRIM_REL_DB = -55 /* 与 build-sfx.py 的 trim_silence 同值 */
+const TRIM_PAD_S = 0.02
+
 function measure(buf) {
   const ch = buf.getChannelData(0) /* 四个素材都是单声道（build-sfx.py 保证） */
   if (!ch.length) return { dur: 0, rmsDb: -999, peakDb: -999 }
-  let sum = 0
   let peak = 0
   for (let i = 0; i < ch.length; i += 1) {
-    const v = ch[i]
-    sum += v * v
-    const a = v < 0 ? -v : v
+    const a = ch[i] < 0 ? -ch[i] : ch[i]
     if (a > peak) peak = a
   }
+  /* 首尾近静音修剪：阈值相对峰值（原因见 build-sfx.py 的 trim_silence） */
+  const th = peak * 10 ** (TRIM_REL_DB / 20)
+  const pad = Math.round(buf.sampleRate * TRIM_PAD_S)
+  let lo = 0
+  let hi = ch.length
+  for (let i = 0; i < ch.length; i += 1) {
+    const a = ch[i] < 0 ? -ch[i] : ch[i]
+    if (a > th) {
+      lo = Math.max(0, i - pad)
+      break
+    }
+  }
+  for (let i = ch.length - 1; i >= 0; i -= 1) {
+    const a = ch[i] < 0 ? -ch[i] : ch[i]
+    if (a > th) {
+      hi = Math.min(ch.length, i + 1 + pad)
+      break
+    }
+  }
+  let sum = 0
+  const n = Math.max(1, hi - lo)
+  for (let i = lo; i < hi; i += 1) sum += ch[i] * ch[i]
   return {
     dur: Math.round(buf.duration * 1000) / 1000,
-    rmsDb: round1(toDb(Math.sqrt(sum / ch.length))),
+    rmsDb: round1(toDb(Math.sqrt(sum / n))),
     peakDb: round1(toDb(peak))
   }
 }

@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<title>③ 翻牌 —— 候选试听（听的是成品）</title>
+<style>
+ :root{color-scheme:dark}
+ body{margin:0;padding:34px 24px 70px;background:radial-gradient(circle at 50% 0%,#1b1730 0%,#0b0912 62%);
+      color:#e8e4f4;font:15px/1.65 "Noto Serif SC","Songti SC",serif}
+ h1{font-size:21px;font-weight:700;letter-spacing:.12em;margin:0 0 8px}
+ .sub{color:#8f88a8;font-size:13px;margin-bottom:8px;max-width:900px}
+ .sub b{color:#cfc7e6}
+ .warn{margin:14px 0 26px;padding:12px 16px;border:1px solid #6b5a2f;border-radius:10px;
+       background:rgba(107,90,47,.14);color:#d9c98f;font-size:13px;max-width:900px}
+ .cand{border:1px solid #2b2544;border-radius:12px;padding:15px 17px;margin-bottom:12px;
+       background:linear-gradient(180deg,rgba(43,37,68,.42),rgba(20,17,33,.42))}
+ .cand.on{border-color:#6a5ab8;background:linear-gradient(180deg,rgba(74,63,122,.42),rgba(20,17,33,.5))}
+ .cand.old{border-color:#5a2f2f;background:linear-gradient(180deg,rgba(74,40,40,.3),rgba(20,17,33,.4))}
+ .hd{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:9px}
+ .tag{font-size:15.5px;letter-spacing:.04em}
+ .pill{font-size:11.5px;padding:2px 9px;border-radius:20px;border:1px solid #3d3563;color:#a89fd0}
+ .pill.ok{border-color:#3f6b4d;color:#8fd3a4;background:rgba(63,107,77,.16)}
+ .pill.no{border-color:#6b3f3f;color:#d39a9a;background:rgba(107,63,63,.16)}
+ .pill.now{border-color:#6a5ab8;color:#cfc0ff;background:rgba(106,90,184,.2)}
+ audio{width:100%;height:34px;margin:3px 0 10px}
+ .cols{display:flex;gap:44px;flex-wrap:wrap}
+ .col h4{margin:0 0 4px;font-size:12px;letter-spacing:.14em;color:#6f6889;font-weight:400}
+ table{border-collapse:collapse;font-size:12.5px}
+ td{padding:2px 14px 2px 0;color:#8f88a8;white-space:nowrap}
+ td.v{color:#cfc7e6;font-variant-numeric:tabular-nums}
+ td.v.bad{color:#e29a9a}
+ .p{color:#6f6889;font-size:12px;margin-top:10px;font-style:italic}
+ .note{margin-top:34px;padding:16px 19px;border:1px solid #4a3f7a;border-radius:12px;
+       background:linear-gradient(180deg,rgba(74,63,122,.26),rgba(20,17,33,.4));
+       color:#a89fd0;font-size:13px;max-width:900px}
+ .note b{color:#cfc7e6}
+ code{background:rgba(106,90,184,.18);padding:1px 6px;border-radius:5px;font-size:.92em}
+</style></head><body>
+<h1>③ 翻牌 —— 候选试听</h1>
+<div class="sub">
+  你的意见：<b>「效果是符合的，但冗杂了点，听起来像在翻书；翻牌要利落一点，你这个听起来像翻了两三张牌。」</b><br>
+  量下来，「像翻了两三张牌」对应的是：旧素材有 <b>3 次起手</b>，第一次到最后一次跨了 <b>0.563s</b>，
+  最后一次起手落在整段 <b>63%</b> 的位置；而且流水线把它的空隙填满了（铺满度 <b>0.24 → 0.89</b>）。<br>
+  所以这轮改的是<b>手势</b>（音色方向不动）：一次起手、动作挤在开头、能量不许铺满。
+</div>
+<div class="warn">
+  <b>这里每条都跑完了构建链</b>，你听到的就等于上线后的那一份 —— 不是原始素材。
+  （旧方案翻车的原因之一正是「素材看着正常、成品被压平」，所以只听素材会判断错。）
+</div>
+
+<div class="cand old">
+  <div class="hd"><span class="tag">旧版（你听出「像在翻书 / 翻了两三张牌」的那个）</span><span class="pill no">已否决</span><span class="pill">被否决</span></div>
+  <audio controls preload="metadata" src="flip--OLD.mp3"></audio>
+  <div class="cols">
+    <div class="col"><h4>素材（生成出来的原始音）</h4><table><tr><td>素材时长 (s)</td><td class="v">1.000</td></tr><tr><td>素材 起手次数</td><td class="v">3</td></tr><tr><td>素材 起手跨度 (s)</td><td class="v bad">0.563</td></tr><tr><td>素材 末次起手位置</td><td class="v bad">0.633</td></tr><tr><td>素材 峰值系数 (dB)</td><td class="v">28.8</td></tr><tr><td>素材 铺满度</td><td class="v">0.241</td></tr><tr><td>素材 质心 (Hz)</td><td class="v">3746.4</td></tr></table></div>
+    <div class="col"><h4>成品（构建后真正上线的）</h4><table><tr><td>成品时长 (s)</td><td class="v">0.862</td></tr><tr><td>成品 解码 RMS (dB)</td><td class="v">-16.9</td></tr><tr><td>成品 解码峰值 (dBFS)</td><td class="v">-0.700</td></tr><tr><td>成品 峰值系数 (dB)</td><td class="v">16.2</td></tr><tr><td>成品 铺满度</td><td class="v bad">0.869</td></tr><tr><td>成品 起手跨度 (s)</td><td class="v bad">0.569</td></tr><tr><td>成品 末次起手位置</td><td class="v bad">0.774</td></tr><tr><td>过满刻度样本数</td><td class="v">0</td></tr><tr><td>削顶比例 (%)</td><td class="v">1.440</td></tr><tr><td>四音响度极差 (dB)</td><td class="v">1.100</td></tr><tr><td>构建增益 (dB)</td><td class="v">16.9</td></tr></table></div>
+  </div>
+  <div class="p">素材 1.0s、整段都是沙沙；成品把空隙全填上（铺满度 0.89）</div>
+  <div class="p">超标：铺满度 0.869 > 0.55；起手跨度 0.569s > 0.20s；末次起手位置 0.774 > 0.45</div>
+</div>
+<div class="cand on">
+  <div class="hd"><span class="tag">s1-60 · 一记擦碰 + 一点纸的颤（当前选用）</span><span class="pill ok">指标合格</span><span class="pill now">当前站点在用</span><span class="pill">One flick only, fast and clean</span></div>
+  <audio controls preload="metadata" src="flip--s1-60.mp3"></audio>
+  <div class="cols">
+    <div class="col"><h4>素材（生成出来的原始音）</h4><table><tr><td>素材时长 (s)</td><td class="v">0.600</td></tr><tr><td>素材 起手次数</td><td class="v">1</td></tr><tr><td>素材 起手跨度 (s)</td><td class="v">0.000</td></tr><tr><td>素材 末次起手位置</td><td class="v">0.184</td></tr><tr><td>素材 峰值系数 (dB)</td><td class="v">25.9</td></tr><tr><td>素材 铺满度</td><td class="v">0.151</td></tr><tr><td>素材 质心 (Hz)</td><td class="v">4680.6</td></tr></table></div>
+    <div class="col"><h4>成品（构建后真正上线的）</h4><table><tr><td>成品时长 (s)</td><td class="v">0.627</td></tr><tr><td>成品 解码 RMS (dB)</td><td class="v">-18.3</td></tr><tr><td>成品 解码峰值 (dBFS)</td><td class="v">-2.580</td></tr><tr><td>成品 峰值系数 (dB)</td><td class="v bad">15.8</td></tr><tr><td>成品 铺满度</td><td class="v">0.200</td></tr><tr><td>成品 起手跨度 (s)</td><td class="v">0.058</td></tr><tr><td>成品 末次起手位置</td><td class="v">0.317</td></tr><tr><td>过满刻度样本数</td><td class="v">0</td></tr><tr><td>削顶比例 (%)</td><td class="v">2.130</td></tr><tr><td>四音响度极差 (dB)</td><td class="v">2.200</td></tr><tr><td>构建增益 (dB)</td><td class="v">8.900</td></tr></table></div>
+  </div>
+  
+  
+</div>
+<div class="cand cand">
+  <div class="hd"><span class="tag">s1-50 · 同上，但只生成 0.5 秒</span><span class="pill no">1 项超标</span><span class="pill">同稿，更短</span></div>
+  <audio controls preload="metadata" src="flip--s1-50.mp3"></audio>
+  <div class="cols">
+    <div class="col"><h4>素材（生成出来的原始音）</h4><table><tr><td>素材时长 (s)</td><td class="v">0.480</td></tr><tr><td>素材 起手次数</td><td class="v">1</td></tr><tr><td>素材 起手跨度 (s)</td><td class="v">0.000</td></tr><tr><td>素材 末次起手位置</td><td class="v">0.012</td></tr><tr><td>素材 峰值系数 (dB)</td><td class="v">26.2</td></tr><tr><td>素材 铺满度</td><td class="v">0.042</td></tr><tr><td>素材 质心 (Hz)</td><td class="v">3180.6</td></tr></table></div>
+    <div class="col"><h4>成品（构建后真正上线的）</h4><table><tr><td>成品时长 (s)</td><td class="v">0.522</td></tr><tr><td>成品 解码 RMS (dB)</td><td class="v">-19.2</td></tr><tr><td>成品 解码峰值 (dBFS)</td><td class="v">-1.420</td></tr><tr><td>成品 峰值系数 (dB)</td><td class="v">17.8</td></tr><tr><td>成品 铺满度</td><td class="v">0.165</td></tr><tr><td>成品 起手跨度 (s)</td><td class="v">0.000</td></tr><tr><td>成品 末次起手位置</td><td class="v">0.022</td></tr><tr><td>过满刻度样本数</td><td class="v">0</td></tr><tr><td>削顶比例 (%)</td><td class="v">2.760</td></tr><tr><td>四音响度极差 (dB)</td><td class="v bad">3.100</td></tr><tr><td>构建增益 (dB)</td><td class="v">11.7</td></tr></table></div>
+  </div>
+  
+  <div class="p">超标：四音响度极差 3.1dB > 3dB</div>
+</div>
+<div class="cand cand">
+  <div class="hd"><span class="tag">s3-50 · 更硬的「啪」，带一点点纸的颤</span><span class="pill no">1 项超标</span><span class="pill">One sharp card flip</span></div>
+  <audio controls preload="metadata" src="flip--s3-50.mp3"></audio>
+  <div class="cols">
+    <div class="col"><h4>素材（生成出来的原始音）</h4><table><tr><td>素材时长 (s)</td><td class="v">0.480</td></tr><tr><td>素材 起手次数</td><td class="v">2</td></tr><tr><td>素材 起手跨度 (s)</td><td class="v">0.052</td></tr><tr><td>素材 末次起手位置</td><td class="v">0.145</td></tr><tr><td>素材 峰值系数 (dB)</td><td class="v">19.6</td></tr><tr><td>素材 铺满度</td><td class="v">0.316</td></tr><tr><td>素材 质心 (Hz)</td><td class="v">4570.8</td></tr></table></div>
+    <div class="col"><h4>成品（构建后真正上线的）</h4><table><tr><td>成品时长 (s)</td><td class="v">0.522</td></tr><tr><td>成品 解码 RMS (dB)</td><td class="v">-16.4</td></tr><tr><td>成品 解码峰值 (dBFS)</td><td class="v">-2.580</td></tr><tr><td>成品 峰值系数 (dB)</td><td class="v bad">13.9</td></tr><tr><td>成品 铺满度</td><td class="v bad">0.596</td></tr><tr><td>成品 起手跨度 (s)</td><td class="v">0.000</td></tr><tr><td>成品 末次起手位置</td><td class="v">0.175</td></tr><tr><td>过满刻度样本数</td><td class="v">0</td></tr><tr><td>削顶比例 (%)</td><td class="v">0.830</td></tr><tr><td>四音响度极差 (dB)</td><td class="v">1.100</td></tr><tr><td>构建增益 (dB)</td><td class="v">9.600</td></tr></table></div>
+  </div>
+  
+  <div class="p">超标：铺满度 0.596 > 0.55</div>
+</div>
+<div class="cand cand">
+  <div class="hd"><span class="tag">s3-60 · 同上，生成 0.6 秒</span><span class="pill no">2 项超标</span><span class="pill">同稿，更长</span></div>
+  <audio controls preload="metadata" src="flip--s3-60.mp3"></audio>
+  <div class="cols">
+    <div class="col"><h4>素材（生成出来的原始音）</h4><table><tr><td>素材时长 (s)</td><td class="v">0.600</td></tr><tr><td>素材 起手次数</td><td class="v">2</td></tr><tr><td>素材 起手跨度 (s)</td><td class="v">0.075</td></tr><tr><td>素材 末次起手位置</td><td class="v">0.184</td></tr><tr><td>素材 峰值系数 (dB)</td><td class="v">22.6</td></tr><tr><td>素材 铺满度</td><td class="v">0.235</td></tr><tr><td>素材 质心 (Hz)</td><td class="v">4741.0</td></tr></table></div>
+    <div class="col"><h4>成品（构建后真正上线的）</h4><table><tr><td>成品时长 (s)</td><td class="v">0.627</td></tr><tr><td>成品 解码 RMS (dB)</td><td class="v">-15.4</td></tr><tr><td>成品 解码峰值 (dBFS)</td><td class="v">-2.120</td></tr><tr><td>成品 峰值系数 (dB)</td><td class="v bad">13.2</td></tr><tr><td>成品 铺满度</td><td class="v bad">0.620</td></tr><tr><td>成品 起手跨度 (s)</td><td class="v">0.075</td></tr><tr><td>成品 末次起手位置</td><td class="v bad">0.541</td></tr><tr><td>过满刻度样本数</td><td class="v">0</td></tr><tr><td>削顶比例 (%)</td><td class="v">1.790</td></tr><tr><td>四音响度极差 (dB)</td><td class="v">1.800</td></tr><tr><td>构建增益 (dB)</td><td class="v">5.100</td></tr></table></div>
+  </div>
+  
+  <div class="p">超标：铺满度 0.62 > 0.55；末次起手位置 0.541 > 0.45</div>
+</div>
+<div class="cand cand">
+  <div class="hd"><span class="tag">s2-50 · 「snap」措辞 —— 指标没过（更像持续擦碰）</span><span class="pill no">2 项超标</span><span class="pill">A snappy card flip</span></div>
+  <audio controls preload="metadata" src="flip--s2-50.mp3"></audio>
+  <div class="cols">
+    <div class="col"><h4>素材（生成出来的原始音）</h4><table><tr><td>素材时长 (s)</td><td class="v">0.480</td></tr><tr><td>素材 起手次数</td><td class="v">2</td></tr><tr><td>素材 起手跨度 (s)</td><td class="v">0.168</td></tr><tr><td>素材 末次起手位置</td><td class="v bad">0.520</td></tr><tr><td>素材 峰值系数 (dB)</td><td class="v">22.7</td></tr><tr><td>素材 铺满度</td><td class="v bad">0.589</td></tr><tr><td>素材 质心 (Hz)</td><td class="v">5482.8</td></tr></table></div>
+    <div class="col"><h4>成品（构建后真正上线的）</h4><table><tr><td>成品时长 (s)</td><td class="v">0.522</td></tr><tr><td>成品 解码 RMS (dB)</td><td class="v">-18.0</td></tr><tr><td>成品 解码峰值 (dBFS)</td><td class="v">-1.090</td></tr><tr><td>成品 峰值系数 (dB)</td><td class="v">16.9</td></tr><tr><td>成品 铺满度</td><td class="v bad">0.686</td></tr><tr><td>成品 起手跨度 (s)</td><td class="v">0.174</td></tr><tr><td>成品 末次起手位置</td><td class="v bad">0.641</td></tr><tr><td>过满刻度样本数</td><td class="v">0</td></tr><tr><td>削顶比例 (%)</td><td class="v">0.690</td></tr><tr><td>四音响度极差 (dB)</td><td class="v">1.900</td></tr><tr><td>构建增益 (dB)</td><td class="v">6.400</td></tr></table></div>
+  </div>
+  
+  <div class="p">超标：铺满度 0.686 > 0.55；末次起手位置 0.641 > 0.45</div>
+</div>
+<div class="note">
+  <b>怎么读这些数</b><br>
+  · <b>起手跨度</b>＝第一次起手到最后一次起手隔了多久。一次动作只该跨几十毫秒；
+    旧素材 0.563s ＝「翻了一下，过半天又翻一下」—— 这是「像翻了两三张牌」的直接量度。<br>
+  · <b>末次起手位置</b>＝最后一次起手落在整段的百分之几。要利落，动作必须全挤在开头。<br>
+  · <b>铺满度</b>＝能量高于「峰值 −20dB」的时间占比。一次动作远低于 1；一片沙沙接近 1。
+    旧成品 0.89 ＝「从头到尾都在响」＝像翻书。<br>
+  · <b>峰值系数</b>＝峰值 − RMS。越高越「点」，越低越「糊成一片」。<br><br>
+  <b>这轮顺带查出来的两件事</b>：<br>
+  ① 用逐级消融（<code>scripts/_ablate_flip.py</code>）确认：那条「像翻书」的沙沙<b>大半是构建链造的</b>，
+     不是素材本身的锅 —— 前三级（高通 / 去静音 / 对齐时长）纹丝不动，问题全出在
+     「RMS 归一 + 软削顶」那一步：素材 RMS 只有 -33.5dB，为了凑响度要拉 +16.9dB，
+     拉不上去就削顶，于是瞬态被压平 15dB、空隙被填满。<br>
+  ② 因此光换素材不够，还加了一条<b>成品判据</b>「一次动作型的素材不许被填平」
+     （已反向验证：旧素材 0.24→0.89 判红，新素材 0.15→0.18 判绿）。<br><br>
+  <b>需要你做的</b>：听一遍，告诉我「就用哪个」。若觉得<b>还可以更干更短</b>、
+  或者<b>尾巴再长一点更有余韵</b>，说方向，我按方向再铺一批（每条约 5~6 点额度）。
+</div></body></html>
