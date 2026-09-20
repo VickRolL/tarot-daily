@@ -5,7 +5,33 @@
 > 未完成的工作看 **`NEXT_STEPS.md`**（含具体做法、优先级、成本与踩坑提醒）。
 > 每次有实质进展都要回来更新本文档的「当前阶段」与「变更日志」。
 
-最后更新：2026-09-20（第二十五轮：**四个音效全部换成 AI 素材并接进站里**，同时修掉两条真故障）。
+最后更新：2026-09-20（第二十六轮：**用户否决 ① charge / ② burst 两个音**，正在换 ElevenLabs 重做）。
+
+> ### ⚠️ 音效现状：③ flip / ④ reveal 用户认可；① charge / ② burst **被否决、待替换**
+>
+> 用户原话：`charge`「听起来像雷云滚滚」「比较吵」；`burst`「像电饭煲烧开打开的时候」。
+> 实测证实两个音是**同一形状的两个极端**（`scripts/out/charge-spec.log`）：
+>
+> | 音 | 质心 | 能量集中处 | 对照：用户满意的两个 |
+> |---|---|---|---|
+> | charge | **102 Hz** | 20–60Hz 占 **50.6%**，谱峰 13.3 / 14.0 / 16.0Hz | flip 3746Hz |
+> | burst | **8718 Hz** | 6–12kHz 占 **84.5%** | reveal 2202Hz |
+>
+> 一个全压在次低频（13 与 14Hz 相差 0.7Hz，**拍频就是那个「滚」**），
+> 一个全挤在高频（纯气流噪声 = 那个「嘶」）。
+>
+> **★ 根因：提示词里的声学名词会被逐字实现。** 写「一层几乎听不见的**低频嗡鸣**」
+> 就得到一个 13Hz 的闷雷；写「一层柔和的**空气向四周铺开**」就得到蒸汽喷射。
+> 「几乎听不见」「柔和」这类形容词**没有任何约束力** —— 它们只描述你希望它多响，
+> 不改变它是什么。
+>
+> → 提示词已按「**点名具体声学事件 + 给出目标频段落点**」重写（`audio-src/README.md`
+> ①② 节，带目标质心 / 占比区间），生成通道改用 **ElevenLabs**（免费层 10k credits/月
+> 就含 Sound Effects），并新增 `scripts/gen-sfx-elevenlabs.py`：
+> 生成后**立刻量指标对目标区间报 PASS/FAIL**，避免拿到手才发现又是个闷雷。
+> 该脚本的判据已做**反向验证**（旧的被否决素材全部触发 FAIL，flip/reveal 不受约束）。
+
+第二十五轮：**四个音效全部换成 AI 素材并接进站里**，同时修掉两条真故障。
 音效现在和 BGM 同一套结构：`sfx.js`「**素材优先、合成兜底**」，素材是
 `assets/audio/sfx/{charge,burst,flip,reveal}.mp3`（共 52 KB），由 `audio-src/sfx/_raw/`
 经 `scripts/build-sfx.py` 修剪+配平产出。四个音的合成配方**一个字没删**，兜底用。
@@ -152,8 +178,11 @@ tarot-app/
 │   ├─ concept/                  主视觉概念图原图（v1）
 │   └─ previews/                 成品预览 + 总览 + **真实渲染截图 screen-*.png** + hero-preview-*.png
 ├─ audio-src/                    ⭐ **音频源文件 + 生成说明**（第二十四轮新增）
-│   ├─ README.md                 音效该怎么生成：AiSounds 四个音的提示词 / 时长 / 交付契约
-│   └─ sfx/                      用户从 AiSounds 下载的音效丢这里，文件名必须是 charge/burst/flip/reveal
+│   ├─ README.md                 音效该怎么生成：四个音的提示词 / 时长 / 交付契约。
+│   │                            ⚠️ 通道已换 **ElevenLabs**（AiSounds 额度用完，免费层含 SFX）；
+│   │                            ①② 被否决后按「点名声学事件 + 目标频段」重写（见文件头 ⚠️）
+│   └─ sfx/                      音效源文件，文件名必须是 charge/burst/flip/reveal；
+│                                `scripts/gen-sfx-elevenlabs.py` 会直接写进 `_raw/`
 └─ src/
     ├─ config/skin.js            ⭐ 皮肤名 / 素材槽位 / 底板与锚点 / 卡牌几何 / 时序（applySkinVars 灌 CSS 变量）
     ├─ config/lqip.js            ⚠️ 由 scripts/build_lqip.py 生成，不要手改
