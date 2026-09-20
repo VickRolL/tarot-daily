@@ -95,7 +95,10 @@ TARGETS = {
     },
 }
 
-API = 'https://api.elevenlabs.io/v1/text-to-sound-effects/convert'
+# ⚠️ 注意别被文档 URL 带偏：文档页面叫 /docs/api-reference/text-to-sound-effects/convert，
+# 但**实际 REST 端点**是 /v1/sound-generation。写成前者会得到 404 {"detail":"Not Found"}。
+# （SDK 里的方法名 still 叫 text_to_sound_effects.convert，这也是混淆的来源。）
+API = 'https://api.elevenlabs.io/v1/sound-generation'
 MODEL = 'eleven_text_to_sound_v2'
 RAW_DIR = os.path.join('audio-src', 'sfx', '_raw')
 
@@ -120,43 +123,68 @@ def read_env_file(path='.env.local'):
     return None
 
 
-def generate(api_key, text, duration, influence, model=MODEL, timeout=120):
-    """调一次 API，返回 mp3 字节。错误信息尽量说清是哪一类。"""
+def generate(api_key, text, duration, influence, model=MODEL, timeout=120, retries=3):
+    """调一次 API，返回 (mp3 字节, 计费字符数或 None)。错误信息尽量说清是哪一类。
+
+    带重试：本机实测偶发 `SSL: UNEXPECTED_EOF_WHILE_READING`（生成请求要跑十几秒，
+    中途连接被掐断），重试即可 —— 别把它当成 key/参数问题去查。
+    401/402/403/422 这类**确定性**错误不重试，直接给出针对性的处理建议。
+    """
+    import time as _time
+
     body = json.dumps({
         'text': text,
         'duration_seconds': duration,
         'prompt_influence': influence,
         'model_id': model,
     }).encode('utf-8')
-    req = urllib.request.Request(
-        API + '?output_format=mp3_44100_128',
-        data=body,
-        headers={
-            'xi-api-key': api_key,
-            'Content-Type': 'application/json',
-            'Accept': 'audio/mpeg',
-        },
-        method='POST',
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as r:
-            return r.read()
-    except urllib.error.HTTPError as e:
-        detail = ''
+
+    last_err = None
+    for attempt in range(1, max(1, retries) + 1):
+        req = urllib.request.Request(
+            API + '?output_format=mp3_44100_128',
+            data=body,
+            headers={
+                'xi-api-key': api_key,
+                'Content-Type': 'application/json',
+                'Accept': 'audio/mpeg',
+                'Connection': 'close',   # 避免复用被中途掐断的 keep-alive 连接
+            },
+            method='POST',
+        )
         try:
-            detail = e.read().decode('utf-8', 'replace')[:400]
-        except Exception:
-            pass
-        hint = {
-            401: 'API key 无效或没带上（检查 ELEVENLABS_API_KEY）',
-            402: '额度用完 / 该功能需要更高套餐',
-            403: '该 key 没有 Sound Effects 权限',
-            422: '参数不合法（duration 必须 0.5~30，influence 必须 0~1）',
-            429: '请求过频，稍等再试',
-        }.get(e.code, '')
-        raise SystemExit(f'  ✗ HTTP {e.code} {e.reason}  {hint}\n    {detail}')
-    except urllib.error.URLError as e:
-        raise SystemExit(f'  ✗ 网络不可达：{e.reason}')
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                # 响应头 character-cost = 这次扣了多少额度；拿不到就返回 None（不影响主流程）
+                return r.read(), r.headers.get('character-cost')
+        except urllib.error.HTTPError as e:
+            detail = ''
+            try:
+                detail = e.read().decode('utf-8', 'replace')[:400]
+            except Exception:
+                pass
+            hint = {
+                401: 'API key 无效 / 权限不足（这个 key 没给 Sound Effects 权限？）',
+                402: '额度用完 / 该功能需要更高套餐',
+                403: '该 key 没有 Sound Effects 权限',
+                404: '端点路径不对（应为 /v1/sound-generation，不是文档页的 '
+                     '/v1/text-to-sound-effects/convert）',
+                422: '参数不合法（duration 必须 0.5~30，influence 必须 0~1）',
+                429: '请求过频，稍等再试',
+            }.get(e.code, '')
+            if e.code == 404:
+                raise SystemExit(f'  ✗ HTTP {e.code} {e.reason}  {hint}\n    {detail}')
+            if e.code not in (500, 502, 503, 504):
+                raise SystemExit(f'  ✗ HTTP {e.code} {e.reason}  {hint}\n    {detail}')
+            last_err = f'HTTP {e.code} {e.reason}'
+        except (urllib.error.URLError, OSError) as e:
+            last_err = f'{type(e).__name__}: {e}'
+
+        if attempt < retries:
+            wait = 2 * attempt
+            print(f'  … 第 {attempt} 次失败（{last_err}），{wait}s 后重试')
+            _time.sleep(wait)
+
+    raise SystemExit(f'  ✗ 连续 {retries} 次失败，最后一次：{last_err}')
 
 
 def measure(path):
@@ -255,10 +283,11 @@ def main():
             suffix = '' if args.variants == 1 else '-' + chr(ord('a') + i)
             out = os.path.join(RAW_DIR, f'{name}-raw{suffix}.mp3')
             print(f'  → 生成中…（{i + 1}/{args.variants}）')
-            data = generate(key, job['prompt'], dur, args.influence)
+            data, cost = generate(key, job['prompt'], dur, args.influence)
             with open(out, 'wb') as f:
                 f.write(data)
-            print(f'  ✓ {out}  {len(data) / 1024:.1f} KB')
+            cost_txt = f' · 计费 {cost}' if cost else ''
+            print(f'  ✓ {out}  {len(data) / 1024:.1f} KB{cost_txt}')
 
             m = measure(out)
             if not m:
