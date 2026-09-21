@@ -258,9 +258,9 @@ tarot-app/
 
 剩余工作看 **`NEXT_STEPS.md`**（含优先级、具体做法、成本与踩坑提醒）。当前最高优先级：
 
-- [ ] **绑定正式域名**（站点已上线，但当前拿到的是 EdgeOne 的**预览链接**：带鉴权、国内访问可能受限、
-      还会注入一条英文 demo 横幅）。绑域名时把 `og:image` / `og:url` / **`twitter:image`**
-      **三处**一起换成绝对地址 —— 在带鉴权的预览链接上改了也不生效（抓取端过不了 token 校验）
+- [ ] **绑定正式域名**（站点已上线，但当前拿到的是 EdgeOne 的**预览链接**：**只有 3 小时有效期**、
+      带鉴权、国内访问可能受限、还会注入一条英文 demo 横幅）。绑域名时把 `og:image` / `og:url` /
+      **`twitter:image`** **三处**一起换成绝对地址 —— 在带鉴权的预览链接上改了也不生效（抓取端过不了 token 校验）
 - [ ] 本机日历回顾页（按日期翻看抽过的牌）
 - [ ] 移动端竖构图主视觉（9:16；当前 3:2 底板在手机上靠裁切过渡，够用但不精致）
 - [ ] 可选：`hero-figure.webp` 独立人物层、LLM 生成解读、无障碍（键盘 / 读屏）优化
@@ -274,7 +274,8 @@ tarot-app/
   可点击跳过、可一键关闭、可在「今日已抽」时自动不播
 - **上线前收尾**：og / twitter 分享 meta、首屏主视觉预加载、牌面空闲预热、`DRAW_MODE` 已切 `'daily'`
 - **首次上线（第三十四轮）**：部署到腾讯云 **EdgeOne Makers**（项目 `tarot-daily`）。
-  部署方式与三条硬约束见 `NEXT_STEPS.md` §2 P1
+  部署方式与**四条**硬约束见 `NEXT_STEPS.md` §2 P1
+  （第三十五轮查清：预览链接**只有 3 小时有效期**，过期＝重新部署一次，约 54 秒 —— 详见 §25.2）
 - **站点图标（第三十四轮）**：`scripts/build_favicon.py` 从牌背自动裁出
   `favicon.ico`(16/32/48) + `icon.png`(192) + `apple-touch-icon.png`(180)，`index.html` 已补 `<link>`
 
@@ -302,6 +303,7 @@ EO="C:/Users/29923/.workbuddy/binaries/node/cli-connector-packages/edgeone.CMD"
 export PAGES_SOURCE=skills                # 必须设：告诉平台这是 AI skill 触发的部署
 "$EO" makers deploy -n tarot-daily --json # 返回单行 JSON，取 .url
 # ⚠️ 返回的 URL 必须带完整 `?eo_token=...&eo_time=...`，去掉即 401
+# ⚠️ 预览链接**只有 3 小时有效期**（官方规定，超时 401）。过期后**再跑一次这条命令**即得新链接，约 54 秒
 # ⚠️ 用 curl / urllib 访问这个 URL 同样 401（网关要浏览器 JS 校验 token）→ 验证得用真浏览器 / shot.mjs
 # ⚠️ 预览链接会注入一条英文 demo 横幅，那不是本项目代码，绑正式域名后消失
 # ⚠️ 部署会在仓库根留下 .edgeone/（dist 副本，44 文件），已在 .gitignore 里
