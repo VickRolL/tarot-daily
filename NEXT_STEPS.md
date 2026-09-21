@@ -1021,6 +1021,24 @@ PY="C:/Users/29923/.workbuddy/binaries/python/envs/default/Scripts/python.exe"
    - 规律：问「另一边从哪儿开始」，要问**那一侧整体的外缘**，而不是内部某段文字的位置。
      叶子节点只适合回答「这段文字占多宽」。
 
+45. **⚠️ `git push` / `git ls-remote` 会「静默挂死」—— 零输出、无报错，实为在等凭据输入**（2026-09-22，干等 10 分 45 秒）
+
+   症状：`git push origin main > log 2>&1` 跑了 10 分钟，**日志 0 字节**，进程还在
+   （`tasklist` 能看到 `git.exe` 与 `git-remote-https.exe`）。看起来像「网络慢」或「仓库大」，
+   **其实都不是** —— 本轮增量只有 4 个提交、其中 3 个是文档。
+   真相：**凭据缓存过期后 git 要提示输入用户名/密码，而这里没有终端可输入 → 永久挂住。**
+
+   对策（一行就够）：
+   ```bash
+   GIT_TERMINAL_PROMPT=0 GIT_HTTP_LOW_SPEED_LIMIT=1000 GIT_HTTP_LOW_SPEED_TIME=30 git push origin main
+   ```
+   - `GIT_TERMINAL_PROMPT=0`：不许提示，**直接失败**（而不是挂死）
+   - `GIT_HTTP_LOW_SPEED_*`：低速持续 30 秒即放弃，避免慢速挂起
+   加上之后同一条推送 **几秒完成**（`7dba77a..08ae1e3`）。
+
+   → 判据：**「零输出 + 长时间运行」要当成「在等输入」处理**，先探进程，别当成网络慢去干等。
+     （本条同时记进了用户级记忆的环境经验，跨项目通用。）
+
 ---
 
 ## 7 · 成本红线
@@ -2400,7 +2418,9 @@ CloudBase 的默认域名 `*.tcloudbaseapp.com` 会弹一道**「访问提示中
 ### 26.1 前置条件：代码必须先推到 GitHub（本轮已在本地完成）
 
 平台的构建源是 GitHub 仓库，**不推就会构建出一个旧版本**。
-本轮已把 R34 / R35 的提交推到 `origin/main`（此前远端停在 `v3` = R32）。
+本轮已把 R34 / R35 的 4 个提交推到 `origin/main` → **远端 `main` = `08ae1e3` = 本地 HEAD**
+（此前远端停在 `v3` = R32），已用 `git ls-remote origin` 核过、本地领先 0 个提交。
+⚠️ 推送过程踩到「静默挂死」，见 §6 第 45 条 —— **git 的网络命令一律带 `GIT_TERMINAL_PROMPT=0`**。
 
 ⚠️ 别忽略这一步：不推就直接 deploy，线上会是 R32 的版本（**没有 favicon、没有声音默认开**）。
 
