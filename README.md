@@ -15,6 +15,30 @@ npm run build    # 生产构建 → dist/（绝对路径，正式发布用）
 npm run preview  # 本地 http 预览 dist/，即「用户视角」：无调试条、无牌面总览
 ```
 
+### 桌面快捷方式（日常看效果用这个）
+
+桌面上有一个 `塔罗日签.lnk`（图标取自牌背素材），双击即可：
+
+1. 源码比 `dist/` 新时自动重新构建（直接调 vite，不走 npm —— 本机 npm 会拉起 wsl.exe 被拦）；
+2. 起本地 http 服务（默认 5180，**带 Range 支持**，音频才能拖动进度条）并打开浏览器；
+3. 重复双击不会叠出一堆服务：会先扫端口段找已在运行的那个，直接复用并开页面；
+4. 关掉那个黑窗口 = 停止服务。
+
+相关文件与脚本：
+
+- `start-tarot.cmd` —— 纯 ASCII 的包装层（`.cmd` 按 ANSI 读，混中文会乱码，所以中文提示都由 node 打印），
+  负责按「已知路径 → 通配扫 `.workbuddy` 托管目录 → 系统 `Program Files`」的顺序找到 node；
+- `scripts/launch_preview.mjs` —— 启动器本体，参数 `--port 5180` / `--no-open` / `--no-build` / `--force-build`；
+- `scripts/make_launch_shortcut.py` —— 生成图标与快捷方式；`--verify` 用 Windows 的 `IShellLink`
+  把 lnk 读回来校验，`--run` 交给 Shell 打开（等价双击）。
+
+> 手写 `.lnk` 字节流的坑（2026-09-21 实测）：不调 COM 自己拼字节也能让 `IShellLink::Load` 读出
+> description/工作目录/参数/图标，**但缺 `LinkTargetIDList`，`ShellExecute` 双击会报
+> `WinError 1155 没有应用程序与此操作的指定文件有关联`**（旁边用 txt 做对照可确认是 lnk 的问题、
+> 不是环境没 shell）。正解是 `IShellLink::SetPath` + `IPersistFile::Save` 让系统自己写
+>（`SetPath` 会生成目标 IDList）；此时 `GetPath` 能读回 target 才算真的可用。
+> 本机 PowerShell 的 COM 实例化被安全策略拦，但 Python `ctypes` 调 `ole32` 是通的。
+
 > **本项目只走 http**（2026-09-19 v2 起）。原先那套「双击 `.cmd` / 双击 `dist-user/index.html`
 > 免服务器直看」的离线通道已整体移除 —— 起因是 v2 要上真 3D，而 `file://` 下本地图片
 > **不能当 WebGL 纹理**（实测 `SecurityError: image element contains cross-origin data`），

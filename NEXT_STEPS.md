@@ -4,11 +4,18 @@
 > 新窗口接力方式：把这句话发给助手 ——
 > **「读取 `C:\Users\29923\WorkBuddy\2026-09-17-19-02-52\tarot-app\PROJECT_STATE.md` 和同目录的 `NEXT_STEPS.md`，继续塔罗日签项目」**
 
-最后更新：2026-09-19
+最后更新：2026-09-21
 
 ---
 
 ## 0 · 先跑起来（30 秒）
+
+> **最省事：双击桌面上的「塔罗日签」**（2026-09-21 起）。它会检查构建产物（源码比 `dist/` 新
+> 就自动重新构建）→ 起本地 http 服务（默认 5180，**带 Range**，音频才能拖进度条）→ 打开浏览器。
+> 重复双击不会叠出一堆服务（先扫端口段找已在运行的那个，直接开页面）；
+> **关掉那个黑窗口就是停止服务**。
+> 链路：`start-tarot.cmd` → `scripts/launch_preview.mjs`（`--help` 看全部选项）；
+> 快捷方式本身要重建时：`python scripts/make_launch_shortcut.py`（`--verify` 校验 / `--run` 等价双击）。
 
 ```bash
 cd "C:/Users/29923/WorkBuddy/2026-09-17-19-02-52/tarot-app"
@@ -293,7 +300,9 @@ PY="C:/Users/29923/.workbuddy/binaries/python/envs/default/Scripts/python.exe"
   ⚠️ 扩的时候必须**覆盖全**：漏字会回退到系统宋体，同一行里出现两种宋体，比不换还难看。
 - **✅ 已做（第二十五轮）· 音效四个音换成 AI 素材**：`src/audio/sfx.js` 现在是
   **素材优先、合成兜底**（与 `ambient.js` 同一套双路结构）。素材由 `scripts/build-sfx.py`
-  从 `audio-src/sfx/_raw/` 修剪+配平产出，四个音彼此响度差 **1.2dB**。
+  从 `audio-src/sfx/_raw/` 修剪+配平产出，四个音彼此响度差 **1.9dB**
+  （2026-09-21 第二十八轮现役四音实测值；判据上限 3dB。**别再引用 1.2dB** ——
+  那是第二十五轮的旧素材，后来 flip 换过两轮，见 §18 / §19）。
   ⚠️ 改动任何音频代码前先读 `sfx.js` 头部那几条规矩，并跑 `probe-sfx` + `probe-sfx-off`；
   换素材后还要跑 `python scripts/build-sfx.py --force`（它自带 ALL_PASS 自检）。
   **后续可扩的方向**（都还没做）：

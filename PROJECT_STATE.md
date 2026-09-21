@@ -5,11 +5,13 @@
 > 未完成的工作看 **`NEXT_STEPS.md`**（含具体做法、优先级、成本与踩坑提醒）。
 > 每次有实质进展都要回来更新本文档的「当前阶段」与「变更日志」。
 
-最后更新：2026-09-21（第二十九轮：**v2 定稿存档** —— 用户认可四个音效，
-把当前版本存成第二版：`git tag v2` + 冻结快照 `_archive/v2-2026-09-21/` + 推送远端，
-并做了还原演练。冻结前体检揪出「快照会把 `.env.local` 烤进 zip」与
-「两个包的清单同名 → 只核到半个包却显示绿灯」两条静默故障，已修。
-详见 `NEXT_STEPS.md` §20）。
+最后更新：2026-09-21（第三十轮：**桌面快捷方式 + 本地预览启动器** —— 桌面 `塔罗日签.lnk`
+双击即「必要时自动构建 → 起本地 http 服务 → 打开浏览器」；途中揭穿「手写 lnk 缺
+`LinkTargetIDList` → 双击报 WinError 1155」，改用系统 `IShellLink` 生成并以 `GetPath` 做判据。
+上一轮第二十九轮：**v2 定稿存档** —— 用户认可四个音效，把当前版本存成第二版：
+`git tag v2` + 冻结快照 `_archive/v2-2026-09-21/` + 推送远端，并做了还原演练。
+冻结前体检揪出「快照会把 `.env.local` 烤进 zip」与「两个包的清单同名 → 只核到半个包却显示绿灯」
+两条静默故障，已修。详见 `NEXT_STEPS.md` §20）。
 
 > ### 音效现状：四个音全部定稿并在站点在用（③ 为用户拍板版）
 > ### ① charge · ② burst · ④ reveal 待用户耳朵最终确认；③ flip 已由用户选定 `s2-50`。
@@ -654,8 +656,16 @@ WebP 压缩后（牌面按实际显示 2 倍图 768×1123）：
 2. 本地日历回看页（需求里列为「后续可加」，抽牌记录已在 `localStorage`）
 3. 移动端专门出 9:16 竖构图主视觉（**不紧急**，实测竖屏构图已成立）
 4. 可选：`hero-figure` 人物层（做背景/人物/球的三层视差，纯锦上添花）
-5. 可选：**中文衬线子集字体**（当前 `@font-face` 数量为 **0**，全站靠系统字体栈兜底 ——
-   这是「美感」上目前最大的一处欠账；做法见 `NEXT_STEPS.md` §2 P2）
+5. ⚠️ **上线前必补：favicon**（2026-09-21 核出：`public/` 下只有 `og-cover.jpg` 与 `skins/`，
+   `index.html` 里也没有 `<link rel="icon">` → 浏览器标签页是**空白默认图标**，作品集观感直接打折）。
+   做法见 `NEXT_STEPS.md` §2 P1
+6. ~~可选：中文衬线子集字体~~ → **✅ 已做，不是待办**（第二十三 / 二十四轮）。
+   现状：`src/index.css` 有 4 条 `@font-face`、`src/assets/fonts/` 三张 woff2 共 **10 KB**
+   （`title-latin` Cinzel 400..900 + `title-han` 400/900，均 SIL OFL 1.1），标题已是罗马碑刻体。
+   **剩余欠账**：牌名 / 低语 / 正文仍是系统字体栈 —— 做法见 `NEXT_STEPS.md` §2 P2
+   > ⚠️ 本条目 2026-09-21 更正：此前写的是「当前 `@font-face` 数量为 **0**，全站靠系统字体栈兜底」，
+   > 那是第二十一轮的状况，第二十三轮就做完了却没回来改 —— 这类「列在待办里、其实早做完」的条目
+   > 比漏记更坏：下一个接手的人（包括几个月后的自己）会照着它重复劳动。
 
 ## 成本红线（重要）
 
@@ -1864,3 +1874,33 @@ APP_URL=http://127.0.0.1:4199/ "$N" scripts/run-flows.mjs audit-title audit-draw
 **收录范围对齐**：新收 `audio-src/`（含 `sfx/_raw/` 四个 AI 音源 —— 旧规则只保住了成品没保住源素材）；
 `scripts/out/` 只留 `_exp/` 与 `_raw-backup-*/`（花过 API 额度的），其余日志截图全排。
 代码包从 577 个文件 / 58.6 MB 压到 7.5 MB（约 1/8）。
+
+### 第三十轮 · 桌面快捷方式 + 本地预览启动器（2026-09-21）
+
+用户：「先这样，做一个本地快捷方式给我，我看看效果」。
+
+- **交付**：桌面 `塔罗日签.lnk` —— 图标由牌背素材裁中央方形（八角星月徽）+ 圆角生成
+  （`assets/launcher/tarot-daily.ico`，含 256→16 七档）。双击 = 必要时自动构建 →
+  起本地 http 服务（5180，带 Range）→ 打开浏览器；关黑窗口即停。
+- **三个文件**：`start-tarot.cmd`（纯 ASCII 包装层，按「已知路径 → 通配扫 `.workbuddy`
+  托管目录 → 系统 `Program Files`」找 node，中文提示一律交给 node 打印）、
+  `scripts/launch_preview.mjs`（启动器本体，零依赖；`--port/--root/--no-open/--no-build/--force-build/--help`）、
+  `scripts/make_launch_shortcut.py`（生成图标与 lnk，`--verify` / `--run`）。
+- **重复双击不叠服务**：启动前先扫 `5180..5209` 端口段，谁回 `__preview_ping` 就复用谁。
+  （只 ping 起始端口是错的：起始端口被别的程序占用时，服务会挪到 5181，
+   下次双击找不到它就会再起一个 → 端口越堆越多。）
+- **⚠️ 关键坑：手写 `.lnk` 字节流双击报 `WinError 1155`。**
+  按 MS-SHLLINK 手拼的 lnk，`IShellLink::Load` 能读出 description / 工作目录 / 参数 / 图标，
+  **但读不出 `target`，`ShellExecute` 报「没有应用程序与此操作的指定文件有关联」** ——
+  缺 `LinkTargetIDList`（`GetPath` 依赖它）。用普通 txt 做对照实验可确认是 lnk 的问题、
+  不是环境没 shell。正解：`IShellLink::SetPath` + `IPersistFile::Save` 让系统自己写
+  （2127 B，`SetPath` 会生成目标 IDList），**此时 `GetPath` 能读回 target 才算真可用**。
+  本机 PowerShell 的 COM 实例化被安全策略拦，但 Python `ctypes` 调 `ole32` 是通的
+  → 校验与生成都走这条路。手写实现保留为 fallback。
+- **`.cmd` 换行**：本轮新写的 cmd 是 LF，按仓库约定必须 CRLF（`gitattributes` 已标 `*.cmd -text`），
+  已修 —— 否则双击会报一堆「不是内部或外部命令」而退出码仍是 0。
+- **验收**：首页 200 · `__preview_ping` 200 · `flip.mp3` Range → **206 + `Content-Range: bytes 0-49/4010`** ·
+  越权路径 404 · `cmd /c start-tarot.cmd --help` 正常（证明 node 探测 + 参数透传可用）·
+  `os.startfile(lnk)` 端到端把服务拉起来并打开浏览器成功。
+- **注意**：由助手进程启动的服务会被环境的进程回收清掉（会话结束即消失），
+  这与用户自己双击无关 —— 用户双击是由 explorer 发起的独立进程。
