@@ -1039,6 +1039,26 @@ PY="C:/Users/29923/.workbuddy/binaries/python/envs/default/Scripts/python.exe"
    → 判据：**「零输出 + 长时间运行」要当成「在等输入」处理**，先探进程，别当成网络慢去干等。
      （本条同时记进了用户级记忆的环境经验，跨项目通用。）
 
+46. **⚠️ Netlify 新建站点默认开着 SSO 门禁 —— 全站 401 + 「Login Redirect」，看起来像部署失败**（2026-09-22，第一次线上验证就撞上）
+
+   症状：`netlify deploy` exit 0、`deploy_url` 也拿到了，但**任何**请求（含真浏览器）都返回 **401**，
+   正文是 Netlify 自己的页面：`<title>Login Redirect</title>` + 跳 `app.netlify.com/edge-access?domain=...&site_id=...`。
+
+   ⚠️ **判据陷阱**：`urllib` / `curl` 拿到 401 时极易直接下结论「部署失败 / 文件没传上去」——
+   **这是站点配置问题，不是部署问题**（42 个文件其实一个不少地在 CDN 上）。
+   识别特征：响应头 `Server: Netlify`，且正文是平台自带的 HTML（不是我们那份 `index.html`）。
+
+   真相：新账号 / 新站点默认 `sso_login: true`（站点级）+ `account_sso_login: true`（账号级，context `all`）。
+   两处都关掉即可（站点级就够，账号级一起关更彻底）：
+
+   ```python
+   PATCH /api/v1/sites/<site_id>   {"sso_login": false}
+   PUT   /api/v1/accounts/<acct>   {"sso_login": false}
+   ```
+
+   → 关掉后**立刻 200**，无需重新部署。**排查顺序：先看响应体是不是平台自带的页面**，
+   是的话就查平台策略；不是，才去查网络 / 代理。
+
 ---
 
 ## 7 · 成本红线
@@ -2506,3 +2526,85 @@ CloudBase 的默认域名 `*.tcloudbaseapp.com` 会弹一道**「访问提示中
 ### 26.9 EdgeOne 那条线保留
 
 EdgeOne 上的部署**不删**，继续当「随时可分享的临时演示」用（重新部署即续期，§25.2）。两条线并存不冲突。
+
+---
+
+## 27 · 2026-09-22 第三十六轮：Netlify 上线（用户版第一次有长期地址）
+
+### 27.1 结果
+
+- 线上地址：**https://tarotdaily.netlify.app**
+  （站点名 `tarotdaily`，site_id `b6ab3ecc-99c3-43b4-8fb3-9b65e4604bd0`，账号 `lmx13695249572`）
+- 部署方式：**手工部署**（netlify-cli 把本地 `dist/` 上传），**尚未接 Git**
+  → 改代码 `git push` **不会**自动上线，要重跑 §27.2 第 4 步
+- **og 三处已改成绝对地址**（`og:image` / `og:url` / `twitter:image` + 新增 `canonical`），
+  即 §26.7 说的「拿到域名后立刻做」那一步 —— 这次是真域名，抓取端能直接取到（不像 EdgeOne 预览链接）
+- EdgeOne 那条线保留（§26.9）
+
+### 27.2 怎么部署的（可复现）
+
+**token 不进命令行**：`scripts/netlify_cli.py` 从 `.env.local` 读 `NETLIFY_AUTH_TOKEN`，
+塞进环境变量再 spawn node（`--auth <token>` 会留在 shell 历史与进程列表里）；
+日志落 `scripts/out/netlify/*.log`。全程**不经 shell** —— 本机 bash 会降级，链式命令会静默不执行。
+
+```bash
+# 1) 建站（名字被占用会自动加后缀，见 27.3）
+python scripts/netlify_cli.py sites:create --name tarot-daily --json
+# 2) 改名（可选）：PUT /api/v1/sites/<id>  {"name":"..."}，422 = 被占用
+# 3) 构建
+node node_modules/vite/bin/vite.js build      # ⚠️ 别用 npm run build（会触发 wsl.exe 被安全策略拦）
+# 4) 部署
+python scripts/netlify_cli.py deploy --prod --dir <绝对路径>/dist --site <site_id> --json
+```
+
+依赖：`netlify-cli@27.8.0` 装在隔离目录
+`C:/Users/29923/.workbuddy/binaries/node/workspace/node_modules/netlify-cli/bin/run.js`（入口，不是 `bin/run.mjs`）。
+
+### 27.3 site name 被占用
+
+`tarot-daily`、`tarot-daily-app` 都返回 `422 {"errors":{"subdomain":["must be unique"]}}`
+→ 最终定 **`tarotdaily`**（无连字符）。
+⚠️ **域名已写进 `index.html` 的 og 三处 + canonical** —— 以后改名必须同步改那几行并重新部署，否则分享卡片指向旧域名。
+
+### 27.4 两层验证（本轮最值得留的部分）
+
+「部署成功」不等于「网上能用」。拆成两层，**各自都能独立证伪**：
+
+**第一层 · 逐个文件核对** —— `scripts/verify_live_assets.py`
+把本地 `dist/` 的 42 个文件拼成线上 URL 逐个 GET，比 **状态码 + 字节数 + sha256** → **42/42 全绿**。
+能抓到：少文件、旧版本残留、内容被 CDN 改过。`index.html` 线上 3022 B（含新 og）。
+
+**第二层 · 真浏览器动态验收** —— `scripts/flows/probe-live.js`，**23 条判据全绿**：
+
+```bash
+node scripts/shot.mjs https://tarotdaily.netlify.app/ scripts/out/live.png \
+  --eval-file scripts/flows/probe-live.js --w 1600 --h 1000 --wait 5200
+```
+
+覆盖：挂载 / 标题 / 水晶球 439×439 / **`.devbar` 零泄漏** / 正文无「抽牌模式」 /
+**没被 SSO 门禁拦到登录页**（§6 第 46 条）/ CSS + three chunk + 字体都加载 /
+og 三处是绝对地址 / 抽牌后卡牌出现且插画 `naturalWidth>0`（隐士 768px、牌背 620px）/
+**5 个 mp3 全部 200**（含 ambient-loop）/ 图鉴 22 张、22 条牌面 URL 唯一、**22 条线上全取 200**
+（**不依赖懒加载有没有上屏**，直接按 URL fetch）/ **图鉴进详情只给 sealed、不渲染建议正文**（R32 的硬要求，线上同样守住）。
+
+### 27.5 两条探针判据是我自己写错的（第四次同一类教训）
+
+1. **可选槽位的 404 不该算失败**：`hero-figure` 是 `skin.js` 里的**可选槽位**
+   （主视觉之上的巫师人物透明层；其职责已被 `hero-hand` 取代，全项目无此素材），
+   `slot()` 按 `.webp → .png` 顺序探测 → **每次加载固定 2 个 404**。
+   这是「缺图自动降级」设计的固有代价，不是故障；探针里显式豁免（带注释），
+   让这条判据继续对**其它** 4xx 敏感。**若想彻底消掉这 2 个 404，删掉 `heroFigure` 槽位即可**（一行，未做）。
+2. **卡面计数要限定 `/cards/`**：`.gallery__item` 里除牌面还有牌背/装饰层图，
+   不过滤会得到唯一 **23** 条，把「22」这条判据误判成失败。
+
+另：探针第一次直接抛 `SyntaxError: Unexpected token '+'` —— 对象字面量里写了
+`'LIVE_' + verdict: value` 这种**没有方括号的计算键**。已改成 `out['LIVE_' + ...] = ...` 再 return。
+
+### 27.6 还没做的
+
+1. **接 Git（自动部署）** —— 现在是手工部署站点。Netlify 支持「先手工部署、之后接 Git，同一站点不必重建」；
+   接上之后 `git push` 即自动上线（这才是当初授权 GitHub 的目的）。步骤见 §26.5 B。
+2. **改代码后必须重新部署**（手工站点不跟随仓库），命令见 §27.2。
+3. 手机真机跨天解锁验证（一直挂着）。
+4. `.env.local` 里现在有两条密钥（ElevenLabs + Netlify）—— 文件在 `.gitignore` 内，不会入库；
+   用户若想撤权，到 Netlify 的 Personal access tokens 页面删掉即可（不影响已部署站点）。

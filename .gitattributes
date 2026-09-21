@@ -20,5 +20,18 @@
 *.tiff binary
 *.psd  binary
 *.zip  binary
+*.ico  binary
 *.woff binary
 *.woff2 binary
+
+# 音频（2026-09-22 第三十六轮补）——
+# 原先只标了图片与字体，**唯独漏了音频**，而 mp3 恰恰是最怕 EOL 转换的一类：
+# 它一旦被改一个字节，表现是「网站没声音 / 有杂音」，几乎不可能联想到版本控制。
+# 当时逐 blob 核过 247 个文件（`scripts/_blob_byte_check.py`）：**没坏**，
+# 所以这一条属于**预防性加固** —— 防将来在 core.autocrlf=true 的机器上 clone/push 时被改坏。
+*.mp3  binary
+*.m4a  binary
+*.wav  binary
+*.ogg  binary
+*.aac  binary
+*.flac binary

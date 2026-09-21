@@ -55,3 +55,8 @@ Thumbs.db
 #    assets/concept/     最早的概念图（风格决策的依据）
 #    public/             运行时素材（skins/ 与 og-cover.jpg）
 # ------------------------------------------------------------
+
+# Local Netlify folder
+# 第三十六轮上线时 netlify-cli 自动加的：它把「站点 ↔ 本地目录」的绑定写在这里
+# （`.netlify/state.json` 含 siteId）。属于本机绑定，不入库。
+.netlify

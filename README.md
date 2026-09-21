@@ -258,12 +258,13 @@ tarot-app/
 
 剩余工作看 **`NEXT_STEPS.md`**（含优先级、具体做法、成本与踩坑提醒）。当前最高优先级：
 
-- [ ] **绑定正式域名**（站点已上线，但当前拿到的是 EdgeOne 的**预览链接**：**只有 3 小时有效期**、
-      带鉴权、国内访问可能受限、还会注入一条英文 demo 横幅）。绑域名时把 `og:image` / `og:url` /
-      **`twitter:image`** **三处**一起换成绝对地址 —— 在带鉴权的预览链接上改了也不生效（抓取端过不了 token 校验）
+- [ ] **把站点接上 Git（自动部署）**：站点已上线并已配好分享 meta，但当前是**手工部署**
+      （netlify-cli 上传 `dist/`）—— 改代码 `git push` 后**不会**自动上线，要重跑部署命令。
+      Netlify 支持「先手工部署、之后接 Git，同一站点不必重建」，步骤见 `NEXT_STEPS.md` §26.5 B
 - [ ] 本机日历回顾页（按日期翻看抽过的牌）
 - [ ] 移动端竖构图主视觉（9:16；当前 3:2 底板在手机上靠裁切过渡，够用但不精致）
-- [ ] 可选：`hero-figure.webp` 独立人物层、LLM 生成解读、无障碍（键盘 / 读屏）优化
+- [ ] 可选：`hero-figure.webp` 独立人物层（会让每次加载固定多 2 个 404 探测，见 `NEXT_STEPS.md` §27.5）、
+      LLM 生成解读、无障碍（键盘 / 读屏）优化
 
 已完成：
 
@@ -276,12 +277,17 @@ tarot-app/
 - **首次上线（第三十四轮）**：部署到腾讯云 **EdgeOne Makers**（项目 `tarot-daily`）。
   部署方式与**四条**硬约束见 `NEXT_STEPS.md` §2 P1
   （第三十五轮查清：预览链接**只有 3 小时有效期**，过期＝重新部署一次，约 54 秒 —— 详见 §25.2）
+- **长期地址上线（第三十六轮）**：**https://tarotdaily.netlify.app**（Netlify，手工部署）。
+  `og:image` / `og:url` / `twitter:image` 三处**已改成绝对地址**（另加 `canonical`），
+  分享卡片在抓取端可用。线上验证：逐文件哈希 **42/42** + 真浏览器 **23/23** —— 详见 §27
 - **站点图标（第三十四轮）**：`scripts/build_favicon.py` 从牌背自动裁出
   `favicon.ico`(16/32/48) + `icon.png`(192) + `apple-touch-icon.png`(180)，`index.html` 已补 `<link>`
 
 ## 全部脚本
 
 ```bash
+cd "C:/Users/29923/WorkBuddy/2026-09-17-19-02-52/tarot-app"
+N="C:/Users/29923/.workbuddy/binaries/node/versions/22.22.2-3/node.exe"
 PY="C:/Users/29923/.workbuddy/binaries/python/envs/default/Scripts/python.exe"
 
 # 美术流水线：读 assets/ 下的原图 → 产出 public/ 下的成品
@@ -298,7 +304,15 @@ PY="C:/Users/29923/.workbuddy/binaries/python/envs/default/Scripts/python.exe"
 "$PY" scripts/preview_hero.py            # 不开浏览器，纯 Python 复现底板定位数学，合成主视觉预览
 "$PY" scripts/package_project.py         # 打包（--light 轻量包）
 
-# 部署到 EdgeOne Makers（第三十四轮起）
+# 部署到 Netlify（第三十六轮起，长期地址走这条）
+"$PY" scripts/netlify_cli.py deploy --prod --dir "$PWD/dist" --site b6ab3ecc-99c3-43b4-8fb3-9b65e4604bd0 --json
+# token 从 .env.local 的 NETLIFY_AUTH_TOKEN 读（不进命令行）；日志落 scripts/out/netlify/
+# ⚠️ 目前是手工部署站点，改代码 push 后不会自动上线 → 要重跑上面这条
+"$PY" scripts/verify_live_assets.py https://tarotdaily.netlify.app              # 42 文件逐字节比对
+"$N" scripts/shot.mjs https://tarotdaily.netlify.app/ scripts/out/live.png \
+     --eval-file scripts/flows/probe-live.js --w 1600 --h 1000 --wait 5200     # 真浏览器 23 条判据
+
+# 部署到 EdgeOne Makers（第三十四轮起，保留作临时演示线）
 EO="C:/Users/29923/.workbuddy/binaries/node/cli-connector-packages/edgeone.CMD"
 export PAGES_SOURCE=skills                # 必须设：告诉平台这是 AI skill 触发的部署
 "$EO" makers deploy -n tarot-daily --json # 返回单行 JSON，取 .url

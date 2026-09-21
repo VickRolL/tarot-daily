@@ -22,8 +22,11 @@
     <meta name="keywords" content="塔罗,日签,每日一签,塔罗牌,大阿卡纳,占卜" />
 
     <!-- 分享到微信 / 朋友圈 / 微博时的卡片信息。
-         og:image 与 og:url 需要**绝对地址**才能在抓取端生效：
-         上线后把 https://你的域名 换成真实域名即可（图片由 scripts/build_og_cover.py 生成）。 -->
+         og:image 与 og:url 必须是**绝对地址**才能在抓取端生效（相对路径一律失效）。
+         2026-09-22 上线 Netlify，域名定为 https://tarotdaily.netlify.app/ —— 换域名时
+         只需改下面三行（og:image / og:url / twitter:image）与 canonical。
+         图片由 scripts/build_og_cover.py 生成（1200×630）。 -->
+    <link rel="canonical" href="https://tarotdaily.netlify.app/" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="今夜一签" />
     <meta property="og:title" content="今夜一签 · 塔罗日签" />
@@ -31,15 +34,16 @@
       property="og:description"
       content="每天一张塔罗牌。轻触水晶球，抽取属于今天的那一张大阿卡纳。"
     />
-    <meta property="og:image" content="/og-cover.jpg" />
+    <meta property="og:image" content="https://tarotdaily.netlify.app/og-cover.jpg" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
-    <meta property="og:url" content="/" />
+    <meta property="og:image:alt" content="今夜一签 · 塔罗日签" />
+    <meta property="og:url" content="https://tarotdaily.netlify.app/" />
 
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="今夜一签 · 塔罗日签" />
     <meta name="twitter:description" content="每天一张塔罗牌。轻触水晶球，抽取属于今天的那一张大阿卡纳。" />
-    <meta name="twitter:image" content="/og-cover.jpg" />
+    <meta name="twitter:image" content="https://tarotdaily.netlify.app/og-cover.jpg" />
   </head>
   <body>
     <div id="root"></div>

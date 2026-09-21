@@ -5,16 +5,24 @@
 > 未完成的工作看 **`NEXT_STEPS.md`**（含具体做法、优先级、成本与踩坑提醒）。
 > 每次有实质进展都要回来更新本文档的「当前阶段」与「变更日志」。
 
-最后更新：2026-09-22（第三十五轮：**查清「给别人看」还差什么** —— 本轮没改代码，只做核查，
-但查出一条**必须记住的硬约束**，详见 `NEXT_STEPS.md` §25）
+最后更新：2026-09-22（第三十六轮：**Netlify 上线** —— 用户版第一次有了长期地址
+**https://tarotdaily.netlify.app**；`og:image` / `og:url` / `twitter:image` **三处相对路径已改成绝对地址**
+（另加 `canonical`）。线上两层验证：逐文件哈希 **42/42**、真浏览器探针 **23/23** 全绿。详见 `NEXT_STEPS.md` §27）
+⚠️ **当前是「手工部署」站点**（netlify-cli 上传本地 `dist/`），**未接 Git** → 改代码 `git push`
+**不会**自动上线，要重跑 §27.2 第 4 步那条命令。站点名 `tarotdaily` **已写进 `index.html` 的 og 三处 +
+canonical**，以后改名必须同步改那里并重新部署，否则分享卡片指向旧域名。
+⚠️ Netlify 新站**默认开着 SSO 门禁**（`sso_login: true`）→ 全站 401，正文是它自带的
+`<title>Login Redirect</title>` 页。**看着像部署失败，其实是站点配置**；关掉站点级 + 账号级
+`sso_login` 即恢复（不必重新部署）。详见 §6 第 46 条。
+以下三条是 **EdgeOne 预览链接**的约束（那条线**保留**，继续当「随时可分享的临时演示」用，见 §26.9）：
 ⚠️ **预览链接只有 3 小时有效期**（EdgeOne 官方规定，超时返回 401）。`eo_time` 是**签发时刻**、
 不是截止时刻；过期后**重新部署一次**即得新链接（实测 **54 秒**）。
 → 所以「发条链接给别人看」只适合当次演示，**不能当交付物**。
 ⚠️ 预览链接**必须带完整 `?eo_token=...&eo_time=...`**，去掉即 401；用 curl / urllib 之类纯 HTTP
 客户端访问**同样** 401 —— 网关要求浏览器 JS 校验 token，**这是网关设计，不是故障**。
 **判据只能用真浏览器**（`scripts/shot.mjs`）：拿 curl 的 401 去判「链接失效」会得出完全相反的结论（已踩两次）。
-⚠️ `og:image` / `og:url` / `twitter:image` **仍是相对路径**：预览链接带鉴权，社交平台抓取端过不了
-token 校验，**改了也不生效**，等绑正式域名再一次改对（注意是**三**处，现存文档只记了两处）。
+⚠️ **同一条纪律对 Netlify 也成立**（第三十六轮验证）：它的 401 来自 SSO 门禁，正文同样是平台自带的
+HTML 页 —— 所以「401」一律先去看**响应体是不是平台自己的页面**，再决定查配置还是查网络。
 上一轮第三十四轮：**首次上线 —— 部署到腾讯云 EdgeOne Makers**（项目 `tarot-daily`，global 区，
 `projectId` `makers-knnrulr5duup`）并补齐 favicon —— 详见 `NEXT_STEPS.md` §24。
 上一轮第三十三轮：**发到 GitHub（`v3`）** —— 把本地 R31 / R32 两个提交推到
@@ -703,10 +711,13 @@ WebP 压缩后（牌面按实际显示 2 倍图 768×1123）：
 
 **已全部移入 `NEXT_STEPS.md`**（含优先级、具体做法、成本估算与踩坑提醒）。最高优先级的未完成项是：
 
-1. ~~发布上线~~ → **✅ 已完成（第三十四轮）**：部署到**腾讯云 EdgeOne Makers**
-   （项目 `tarot-daily`，global 区）。**还剩的收尾是「绑正式域名」，且必须和 og 一起做**：
-   当前这个预览链接带鉴权（`?eo_token=...&eo_time=...`），社交平台抓取端过不了 token 校验，
-   **og 现在改了也不生效**。做法见 `NEXT_STEPS.md` §2 P1
+1. ~~发布上线~~ → **✅ 已完成（第三十四轮 EdgeOne / 第三十六轮 Netlify）**：
+   **长期地址 https://tarotdaily.netlify.app**（手工部署，未接 Git）。
+   og 三处**已改成绝对地址**并线上复验通过 —— 当初「等绑正式域名再改」的欠账**已还**。
+   剩下的收尾只有两件：① **把站点接上 Git**（之后 push 即自动上线，见 `NEXT_STEPS.md` §26.5 B / §27.6）；
+   ② 若想换更好记的域名，改 `index.html` 的 og 三处 + canonical 再重新部署。
+   > EdgeOne 那条线保留，当「随时可分享的临时演示」用（预览链接 3 小时，重新部署即续期）。
+   > ⚠️ CloudBase 默认域名**不能**当对外地址：会弹「访问提示中间页」，官方禁止正式分发。
 2. 本地日历回看页（需求里列为「后续可加」，抽牌记录已在 `localStorage`）
 3. 移动端专门出 9:16 竖构图主视觉（**不紧急**，实测竖屏构图已成立）
 4. 可选：`hero-figure` 人物层（做背景/人物/球的三层视差，纯锦上添花）
@@ -740,7 +751,17 @@ PY="C:/Users/29923/.workbuddy/binaries/python/envs/default/Scripts/python.exe"
 # ---- 看「用户视角」（无调试条）----
 "$N" node_modules/vite/bin/vite.js preview    # 起本地 http 预览 dist/
 # ⚠️ 离线通道（dist-user / dist-dev / 三个 .cmd）已于 2026-09-19 整体移除，见第 6 节第 29 条
-# 线上地址见 NEXT_STEPS.md §2「发布上线」
+# 线上长期地址：https://tarotdaily.netlify.app （EdgeOne 的预览链接见 NEXT_STEPS.md §25）
+
+# ---- 部署到 Netlify（第三十六轮起，长期地址走这条）----
+# token 从 .env.local 读（NETLIFY_AUTH_TOKEN），不进命令行、不进 shell 历史
+"$PY" scripts/netlify_cli.py sites:list --json
+"$PY" scripts/netlify_cli.py deploy --prod --dir "$PWD/dist" --site b6ab3ecc-99c3-43b4-8fb3-9b65e4604bd0 --json
+# ⚠️ 有配 .env.local 里的 NETLIFY_AUTH_TOKEN；日志落 scripts/out/netlify/*.log
+# ⚠️ 部署后必须验两层（构建成功 ≠ 网上能用）：
+"$PY" scripts/verify_live_assets.py https://tarotdaily.netlify.app   # 42 文件 逐字节比对
+"$N" scripts/shot.mjs https://tarotdaily.netlify.app/ scripts/out/live.png \
+     --eval-file scripts/flows/probe-live.js --w 1600 --h 1000 --wait 5200   # 真浏览器 23 条判据
 
 # ---- 美术素材流水线 ----
 "$PY" scripts/build_card_assets.py            # 牌面：去水印 + 裁切 + 导出 WebP + 合成预览
@@ -2216,3 +2237,59 @@ EdgeOne 官方文档写明：通过「项目域名」与「部署域名」访问
 （它真正的价值在别处：CloudBase 环境可用来**办备案**，不必为备案单买一台服务器。）
 
 详见 `NEXT_STEPS.md` §25。
+
+---
+
+### 第三十六轮 · Netlify 上线（用户版第一次有长期地址）（2026-09-22）
+
+用户把 Netlify 的 Personal access token 直接给了我，让我代做。**这一步是这轮唯一真正卡住的环节 ——
+不是技术难，而是「谁来点按钮」**：GitHub 授权要用户本人，建站/部署则可以 CLI 代做。
+
+**① 结果**
+
+- **https://tarotdaily.netlify.app**（站点名 `tarotdaily`，site_id `b6ab3ecc-99c3-43b4-8fb3-9b65e4604bd0`）
+- 方式：**手工部署**（netlify-cli 上传本地 `dist/`），**未接 Git** —— 这点必须讲清楚，
+  否则用户会以为「以后 push 就自动上线」
+- **og 三处改成绝对地址 + 新增 `canonical`** —— 第三十四轮「故意不改」的欠账**这轮还清**
+  （当时理由正当：EdgeOne 预览链接带鉴权，抓取端过不了 token；Netlify 不需要 token，所以改了有效）
+- EdgeOne 保留（临时演示线），两条线并存
+
+**② token 怎么用的（安全处理）**
+
+用户直接在对话里贴了 token。我**没有**走 `--auth <token>`（会留在 shell 历史与进程列表），
+而是写进 `.env.local`（`.gitignore:36` 已覆盖），再由 `scripts/netlify_cli.py` 读进环境变量 spawn node。
+日志落 `scripts/out/netlify/*.log`。全程不经 shell（本机 bash 会降级、链式命令会静默不执行）。
+
+**③ ★ 第一次线上验证撞上门禁：全站 401「Login Redirect」**
+
+`deploy` exit 0、`deploy_url` 也拿到了，但 42 个文件**全部 401**，正文是 Netlify 自带的
+`<title>Login Redirect</title>` 页 → 跳 `app.netlify.com/edge-access?...&site_id=...`。
+差点判成「部署失败」，实际是**新站默认 `sso_login: true`**（站点级）+ `account_sso_login: true`（账号级）。
+关掉两处后**立刻 200**，一个字节都没重传。→ 已沉淀为 **§6 第 46 条**（含判据纪律：
+**401 先看响应体是不是平台自己的页面**）。
+
+**④ 两层验证（本轮最值得留的方法）**
+
+| 层 | 脚本 | 覆盖 | 结果 |
+|---|---|---|---|
+| 静态 | `scripts/verify_live_assets.py` | 42 个产物逐个 GET，比 状态码 + 字节数 + **sha256** | **42/42** |
+| 动态 | `scripts/flows/probe-live.js` | 真浏览器：挂载 / 无调试条 / 未被门禁拦 / og 绝对地址 / 真抽牌 / 5 个 mp3 全 200 / 图鉴 22 张且 22 条 URL 线上全取 200 / 图鉴只给 sealed | **23/23** |
+
+「部署成功」≠「网上能用」，两层各自能独立证伪 —— 这次两层的价值立刻体现：静态层全绿的同时，
+动态层抓出 og 还是相对路径（配置问题）与 `hero-figure` 的两个 404（见 ⑤）。
+
+**⑤ 两条探针判据是我自己写错的（同类教训第四次）**
+
+1. `hero-figure` 的两个 404 属**设计**：它是 `skin.js` 的**可选槽位**（主视觉之上的巫师人物透明层，
+   职责已被 `hero-hand` 取代），`slot()` 按 `.webp → .png` 探测 → 每次加载固定 2 个 404。
+   探针里显式豁免并注释（否则它会淹没真正的 404）。**想彻底消掉可删 `heroFigure` 槽位（一行，未做）。**
+2. 卡面计数要限定 `/cards/`：`.gallery__item` 里还有牌背/装饰层图，不过滤会数成 **23**。
+   另：第一版探针直接抛 `SyntaxError: Unexpected token '+'` —— 对象字面量里写了
+   `'LIVE_' + verdict: value` 这种没方括号的计算键，改成先赋值再 return。
+
+**⑥ 站点名与域名**
+
+`tarot-daily` / `tarot-daily-app` 均被占用（`422 must be unique`）→ 定 **`tarotdaily`**。
+⚠️ 域名已写进 `index.html` 的 og 三处与 canonical，**改名要一起改并重新部署**。
+
+详见 `NEXT_STEPS.md` §27。
