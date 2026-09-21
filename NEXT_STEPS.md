@@ -4,7 +4,12 @@
 > 新窗口接力方式：把这句话发给助手 ——
 > **「读取 `C:\Users\29923\WorkBuddy\2026-09-17-19-02-52\tarot-app\PROJECT_STATE.md` 和同目录的 `NEXT_STEPS.md`，继续塔罗日签项目」**
 
-最后更新：2026-09-21（第三十三轮：**已发到 GitHub —— `origin/main` = `2a37b36`，标签 `v3`** —— 详见 §23。
+最后更新：2026-09-22（第三十四轮：**首次上线 —— 部署到腾讯云 EdgeOne Makers** + 补齐 favicon —— 详见 §24。
+三条先读：**预览链接必须带完整 `?eo_token=...&eo_time=...`，去掉即 401**（网关要求浏览器 JS 校验 token，
+用 curl / urllib 之类纯 HTTP 客户端访问同样 401，这是网关设计不是故障）、
+**og 三处仍等正式域名**（预览链接带鉴权，社交平台抓取端过不了 token 校验，改了也不生效）、
+**`.edgeone/` 是部署产物、已加入 `.gitignore`**（它是 dist 的副本，44 个文件，不加会被 `git add .` 卷进仓库）。
+上一轮第三十三轮：**已发到 GitHub —— `origin/main` = `2a37b36`，标签 `v3`** —— 详见 §23。
 本轮没改功能代码，只是把 R31 / R32 推上去并打了 `v3`。
 ⚠️ 两条下次照做：**密钥扫描要在 push 之前**（本轮推完才补扫，零命中是运气）、
 **别用 `git branch -vv` 判「远端有没有」**（本机 `[origin/main: gone]` 是常态，配置没问题，是环境丢引用）。
@@ -154,7 +159,7 @@ python scripts/verify_snapshot_restore.py --label v3 --date <日期>      # 演�
 | **版本存档** | ✅ 完成 | 第二十九轮：**v2 定稿存档**（用户认可四个音效那一版）—— 打标签 `v1` / `v2`、快照落 `_archive/v2-2026-09-21/`（code 7.5 MB · art 111.6 MB）、推送远端 `origin/main`（此前 R25~R28 共 14 个提交**只在本地**）。还原演练 `scripts/verify_snapshot_restore.py` 已跑通。冻结前体检揪出两条静默故障（密钥会进 zip / 两份清单同名互相覆盖）并已修。**第三十三轮**：R31 / R32 推远端 + 打 **`v3`**（`origin/main` = `2a37b36`）—— ⚠️ **v3 没有本地冻结快照**（`_archive/` 不进版本库），要补就按 §20 流程走 |
 | 交付形态 | 🔶 **待落地** | 改为**线上链接**（Q2 决策：静态托管 + git），不再发含离线副本的 zip。打包脚本保留给需要代码的人，已去掉离线副本逻辑与 `--no-preview` |
 | 移动端 | 🔶 可用 | 竖屏实测构图成立，不塌；单独出 9:16 主视觉仍是提升项 |
-| 发布上线 | ⬜ 未做 | 纯静态，`dist/` 直接托管 |
+| 发布上线 | ✅ **已上线**（第三十四轮） | 部署到 **EdgeOne Makers**（项目 `tarot-daily`，global 区）。预览链接须带完整 `?eo_token=...&eo_time=...`，去掉即 401。og 三处仍待正式域名，见 §2「发布上线」 |
 
 **可交付物**：`tarot-app/dist/`（构建产物，可直接静态托管）、**线上链接**（待上线，见 §2「发布上线」）、
 `assets/previews/screen-*.png`
@@ -194,19 +199,45 @@ PY="C:/Users/29923/.workbuddy/binaries/python/envs/default/Scripts/python.exe"
 
 ---
 
-### 🟠 P1 · 发布上线（最该先做）
+### ✅ P1 · 发布上线（第三十四轮：已完成首次上线）
 
-纯静态零后端，`dist/` 丢到任何静态托管都能跑。用 WorkBuddy 的 **「发布为应用」** skill 可以一键出在线链接。
+纯静态零后端，已部署到**腾讯云 EdgeOne Makers**（项目 `tarot-daily`，global 区）。
 
-**上线后必须改三处**（否则分享卡片没有缩略图 / 标签页没图标）：
-- `index.html` 里 `og:image` 与 `og:url` 现在是相对路径 `/og-cover.jpg`、`/`，
-  **抓取端要求绝对地址** —— 换成 `https://你的域名/og-cover.jpg`、`https://你的域名/`
-- **补一个 favicon**（2026-09-19 核出：`public/` 下只有 `og-cover.jpg` 与 `skins/`，
-  `index.html` 里也没有 `<link rel="icon">` → 浏览器标签页是**空白默认图标**，作品集观感直接打折）。
-  最省事的做法：从 `og-cover.jpg` 裁一个 512×512 存成 `public/icon.png`，
-  再补 `<link rel="icon" href="/icon.png">` 与 `<link rel="apple-touch-icon" href="/icon.png">`
-  （后者管「添加到主屏幕」的图标，移动端分享场景会用到）
-- `vite.config.js` 的 `base` 默认 `/`，部署在子路径下要跟着改
+**发布方式**（连接器已把 `edgeone` CLI 装好并登录，**不用碰安装/登录**，直接部署）：
+
+```bash
+cd "C:/Users/29923/WorkBuddy/2026-09-17-19-02-52/tarot-app"
+export PAGES_SOURCE=skills                              # 必须设：告诉平台这是 AI skill 触发的部署
+"$EO" makers deploy -n tarot-daily --json               # 返回单行 JSON，取 .url
+```
+
+`$EO` = `C:/Users/29923/.workbuddy/binaries/node/cli-connector-packages/edgeone.CMD`
+（连接器装的，不在 PATH 常规位置 —— 用 `which edgeone` 能找到这个 `.CMD`）。
+不加 `-n` 且项目未链接时会掉进交互式选择菜单：**Agent 场景必须带 `-n`**。
+
+⚠️ **三条硬约束（都踩过或会踩）**：
+1. **预览链接必须带完整 `?eo_token=...&eo_time=...`**，去掉 query 直接 401。而且用
+   curl / urllib 这类**纯 HTTP 客户端访问同样 401** —— 网关要求浏览器 JS 校验 token。
+   所以**验证线上效果必须用真浏览器**：`scripts/shot.mjs <完整URL> out.png` 即可（它会自己拉起 Chrome）。
+2. **预览链接会注入一条英文横幅**（`For demonstration and testing purposes only...`）——
+   **不是本项目代码**（`src/` 里搜不到），是 EdgeOne 预览环境加的，绑正式域名后消失。别去源码里找它。
+3. **国内访问可能受限**（预览域名未备案）：长期稳定给国内用户看，要绑**已备案**的自定义域名。
+
+**还剩的收尾（必须和「绑正式域名」一起做）**：
+- `index.html` 里 `og:image` / `og:url` / **`twitter:image`** 是相对路径（`/og-cover.jpg`、`/`）
+  → 抓取端要求**绝对地址**，换成 `https://你的域名/og-cover.jpg`。
+  ⚠️ 是**三处**不是两处 —— `twitter:image` 是同一张图，最容易漏。
+  ⚠️ 在**当前这个带鉴权的预览链接上改了也不生效**（抓取端过不了 token 校验），
+  所以别单独改，等域名一起做。
+- `vite.config.js` 的 `base` 默认 `/`，部署在子路径下要跟着改（当前是根路径，不用动）。
+
+**favicon 已于第三十四轮补齐**（原「上线前必补」项，已完成）：
+`scripts/build_favicon.py` 从牌背 `card-back.webp` **自动探测深绿内框**再裁正方形，
+产出 `public/favicon.ico`（16/32/48）+ `icon.png`（192）+ `apple-touch-icon.png`（180），
+`index.html` 已补三条 `<link rel="icon">`。换素材后重跑该脚本即可。
+⚠️ 该脚本有个**不报错的坑**：牌背最右列/最底行有一道 1px 暗描边，纳入「暗像素 bbox」
+会把内框撑成整张图 → 产出星形偏左、右边多一条米色竖条。已用 `EDGE_SKIP=6` 排除最外圈，
+**不要把这个常量删掉**。
 
 **上线后建议真机验证一次跨天解锁**（2026-09-19 已在本地用 `--seed` 验过，逻辑是对的，缺真机确认）：
 抽完牌 → 改系统日期到明天 → 刷新，应该能重新抽
@@ -2229,3 +2260,67 @@ build: {
    是环境丢弃引用写入（见第 6 节第 33 条），不是配置问题。
    所以**唯一判据是 `git ls-remote origin`**（本轮靠它确认 `main = 2a37b36`、三个 tag 都在远端）。
    另：仓库是 **private**（匿名请求 `api.github.com/repos/VickRolL/tarot-daily` 返回 404 反证）。
+
+---
+
+## 24 · 2026-09-22 第三十四轮：首次上线（EdgeOne Makers）+ 补 favicon
+
+### 24.1 先摆事实、再让用户拍板（平台选择会反过来决定后面每一步）
+
+用户第一句是「接下来要做的就是尝试部署网站了，你看看这一步都需要怎么做？」，
+并且明确要求「需要什么连接器、用什么部署都要咨询我」。所以本轮**没有**直接开跑，先核实了三件事：
+
+| 核实到的事实 | 它决定了什么 |
+|---|---|
+| `dist/` 实测 **7.2 MB / 39 文件**、纯静态零后端 | 任何静态托管都吃得下，不用为体积挑平台 |
+| 仓库是 **private** | **GitHub Pages 免费版用不了**（要 Pro）；Vercel / Cloudflare / 腾讯云都能连私有仓 |
+| 「上线前必补」清单里 favicon 还欠着 | 它**与平台无关**，可以趁选平台的时间先做掉 |
+
+用户选了 **EdgeOne Makers** + 「没有域名，先用平台默认地址」。
+部署命令与三条硬约束写在 §2 P1，这里不重复。
+
+### 24.2 ★ 验收必须用真浏览器 —— 纯 HTTP 客户端一律 401
+
+`curl` / `urllib` 访问部署 URL（**哪怕带上完整的 `?eo_token=...&eo_time=...`**）返回 **401**。
+第一反应是「部署失败」或「参数拿错了」，**其实两边都不是**：网关要求 `eo_token` 经**浏览器 JS 校验**，
+纯 HTTP 客户端根本没有执行 JS 的能力。
+
+判据改用 `scripts/shot.mjs <完整URL> out.png`（它自己拉起 Chrome）：
+`readyState=complete` / `hasCanvas=true`（WebGL 球真的起来了）/ 三个图标 `link` 都在 / 中文正文完整
+—— 这几条同时为真，才算「真的上线了」。
+
+### 24.3 ★ favicon：脚本「跑成功」但产出是错的
+
+**「用全图统计取边界」这种写法，会被 1px 的边缘杂讯整个带偏。**
+
+牌背最右列与最底行有一道 1px 的暗色描边 → 「暗像素 bbox」从真实的 `(26,27,594,878)`
+直接变成 `(26,27,620,906)`（≈整张图）→ 裁切框超出画布 → 产出里**星形偏左、右侧多一条米色竖条**，
+**而脚本 exit 0、不打印任何警告**。
+
+对策两条，缺一不可：
+1. 取边界前**先排除最外 `EDGE_SKIP` 像素**；
+2. **产出必须人眼看一眼** —— 别只看「脚本说 OK」和那个体积数字。
+
+（选材与取值的详情、以及被淘汰的另外两个方案，见 `PROJECT_STATE.md` 第三十四轮条目。）
+
+### 24.4 两条部署通道的关系（用户后来提到的 CloudBase）
+
+- **EdgeOne Makers**（本轮已用）：连接器授权后 CLI 已装好并登录，`makers deploy` 一条命令出链接。
+  但它默认给的是**预览链接** —— 带鉴权、国内访问可能受限、还会注入一条英文 demo 横幅。
+- **CloudBase**（未用）：用户说他那边环境已配好，但 **「环境配好」≠「我能驱动它」**。
+  要在 WorkBuddy 里操作 CloudBase，得**先授权对应的连接器**。所以那条路若要走，
+  下一步是「授权」，不是「直接部署」—— 这个区别必须跟用户讲清楚，否则他会以为已经就绪。
+
+### 24.5 一个差点漏掉的仓库污染
+
+`edgeone makers deploy` 会在仓库根留下 **`.edgeone/`（44 个文件 = dist 的副本）**，
+而它**不在 `.gitignore` 里**。在 `git status` 里它只是「未跟踪」，看着人畜无害，
+但**只要有人敲一次 `git add .` 就会被卷进仓库**。已加入忽略并注明理由。
+
+### 24.6 明确「不改」的一处（也是本轮唯一主动留的欠账）
+
+`index.html` 里的 `og:image` / `og:url` / `twitter:image` **保持相对路径不动**。
+
+理由：当前预览链接带鉴权，社交平台抓取端过不了 token 校验 —— **改了也不生效**，
+不如和「绑正式域名」一起做，避免同一个改动做两遍。
+顺手核出：要改的是**三**处不是两处（`twitter:image` 在旧文档里一直被漏掉）。

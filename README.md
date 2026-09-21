@@ -258,7 +258,9 @@ tarot-app/
 
 剩余工作看 **`NEXT_STEPS.md`**（含优先级、具体做法、成本与踩坑提醒）。当前最高优先级：
 
-- [ ] 发布为在线链接（纯静态站；把 `index.html` 里的 `og:image` / `og:url` 换成线上绝对地址）
+- [ ] **绑定正式域名**（站点已上线，但当前拿到的是 EdgeOne 的**预览链接**：带鉴权、国内访问可能受限、
+      还会注入一条英文 demo 横幅）。绑域名时把 `og:image` / `og:url` / **`twitter:image`**
+      **三处**一起换成绝对地址 —— 在带鉴权的预览链接上改了也不生效（抓取端过不了 token 校验）
 - [ ] 本机日历回顾页（按日期翻看抽过的牌）
 - [ ] 移动端竖构图主视觉（9:16；当前 3:2 底板在手机上靠裁切过渡，够用但不精致）
 - [ ] 可选：`hero-figure.webp` 独立人物层、LLM 生成解读、无障碍（键盘 / 读屏）优化
@@ -271,6 +273,10 @@ tarot-app/
 - **迎接动画**：进页面播放「信封开启」——**全屏、斜置、贴近开口的大特写**，纯代码绘制，风格与站点一致；
   可点击跳过、可一键关闭、可在「今日已抽」时自动不播
 - **上线前收尾**：og / twitter 分享 meta、首屏主视觉预加载、牌面空闲预热、`DRAW_MODE` 已切 `'daily'`
+- **首次上线（第三十四轮）**：部署到腾讯云 **EdgeOne Makers**（项目 `tarot-daily`）。
+  部署方式与三条硬约束见 `NEXT_STEPS.md` §2 P1
+- **站点图标（第三十四轮）**：`scripts/build_favicon.py` 从牌背自动裁出
+  `favicon.ico`(16/32/48) + `icon.png`(192) + `apple-touch-icon.png`(180)，`index.html` 已补 `<link>`
 
 ## 全部脚本
 
@@ -282,12 +288,23 @@ PY="C:/Users/29923/.workbuddy/binaries/python/envs/default/Scripts/python.exe"
 "$PY" scripts/build_hero_assets.py       # 主视觉三件套：hero-bg / hero-orb（自动抠白底）/ card-back
 "$PY" scripts/build_lqip.py              # 生成首屏占位图（LQIP），写入 src/config/lqip.js
 "$PY" scripts/build_og_cover.py          # 合成 1200×630 社交分享封面 public/og-cover.jpg
+"$PY" scripts/build_favicon.py           # 站点图标三件套 favicon.ico / icon.png / apple-touch-icon.png
+                                         # （加 --preview 另出 16/32/48 放大对照图）；换牌背素材后要重跑
 
 # 核对 / 打包
 "$PY" scripts/verify_card_assets.py      # 验收：卡框是否有透明洞 + 22 张牌面是否有残留浅色边带
 "$PY" scripts/contact_sheet.py           # 22 张原始插画总览
 "$PY" scripts/preview_hero.py            # 不开浏览器，纯 Python 复现底板定位数学，合成主视觉预览
 "$PY" scripts/package_project.py         # 打包（--light 轻量包）
+
+# 部署到 EdgeOne Makers（第三十四轮起）
+EO="C:/Users/29923/.workbuddy/binaries/node/cli-connector-packages/edgeone.CMD"
+export PAGES_SOURCE=skills                # 必须设：告诉平台这是 AI skill 触发的部署
+"$EO" makers deploy -n tarot-daily --json # 返回单行 JSON，取 .url
+# ⚠️ 返回的 URL 必须带完整 `?eo_token=...&eo_time=...`，去掉即 401
+# ⚠️ 用 curl / urllib 访问这个 URL 同样 401（网关要浏览器 JS 校验 token）→ 验证得用真浏览器 / shot.mjs
+# ⚠️ 预览链接会注入一条英文 demo 横幅，那不是本项目代码，绑正式域名后消失
+# ⚠️ 部署会在仓库根留下 .edgeone/（dist 副本，44 文件），已在 .gitignore 里
 
 # git / 快照（2026-09-19 起）
 git log --oneline                        # bb0ad52 = v1 基线
