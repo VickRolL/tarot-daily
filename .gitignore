@@ -8,6 +8,10 @@
 dist/
 dist-user/
 dist-dev/
+# EdgeOne 部署产物（第三十四轮接入 EdgeOne Makers）。
+# `edgeone makers deploy` 会先把构建输出搬进 `.edgeone/` 再上传（实测 44 个文件），
+# 本质是 dist/ 的副本 → 不入库。项目绑定靠 `-n <project-name>` 识别，不依赖这里的文件。
+.edgeone/
 
 # ---- 本机排查产物：体积大，且对构建无价值 ----
 # 220 MB —— 截图 / 一次性探针 / 无头浏览器 profile 残留

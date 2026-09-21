@@ -6,6 +6,15 @@
     <meta name="theme-color" content="#08050f" />
     <title>今夜一签 · 塔罗日签</title>
 
+    <!-- 站点图标（第三十四轮补；三个文件都由 scripts/build_favicon.py 从牌背生成）
+         · favicon.ico —— 浏览器标签页真正用的是它（内含 16/32/48 三档）。
+           必须存在：**浏览器在 HTML 未声明 icon 时会自动请求 /favicon.ico**，缺了控制台会多一条 404。
+         · icon.png 192×192 —— 高 DPI 与「添加到书签」场景。
+         · apple-touch-icon —— iOS「添加到主屏幕」的图标。 -->
+    <link rel="icon" href="/favicon.ico" sizes="32x32" />
+    <link rel="icon" type="image/png" href="/icon.png" sizes="192x192" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+
     <meta
       name="description"
       content="每天一张塔罗牌。静心片刻，轻触水晶球，抽取属于今天的那一张大阿卡纳，看看它想对你说什么。"
