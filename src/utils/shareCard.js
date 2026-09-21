@@ -234,7 +234,7 @@ function paintCard(ctx, card, x, y, width, art, frame) {
  * 长文案就会压到页脚水印上。所以先在离屏画布上量出真实高度，
  * 再决定要不要整体缩放（见 renderShareCard）。
  */
-function drawContent(ctx, card, art, frame, W) {
+function drawContent(ctx, card, advice, art, frame, W) {
   const M = 84
   const maxW = W - M * 2
   const cx = W / 2
@@ -325,25 +325,33 @@ function drawContent(ctx, card, art, frame, W) {
   ctx.stroke()
   ctx.restore()
 
-  // 今日建议
-  y += 60
-  ctx.save()
-  ctx.font = `400 30px ${FONT_DISPLAY}`
-  ctx.fillStyle = COLOR.gold
-  ctx.textAlign = 'center'
-  const adviceLines = wrapText(ctx, `今日建议 · ${card.advice}`, maxW - 40)
-  adviceLines.forEach((line, i) => ctx.fillText(line, cx, y + i * 50))
-  ctx.restore()
+  // 今日建议（第三十二轮起由调用方传入：页面上显示哪一条，图上就画哪一条）
+  // advice 缺失时整块跳过 —— 宁可少一行，也不要在图上印「今日建议 · undefined」
+  if (advice) {
+    y += 60
+    ctx.save()
+    ctx.font = `400 30px ${FONT_DISPLAY}`
+    ctx.fillStyle = COLOR.gold
+    ctx.textAlign = 'center'
+    const adviceLines = wrapText(ctx, `今日建议 · ${advice}`, maxW - 40)
+    adviceLines.forEach((line, i) => ctx.fillText(line, cx, y + i * 50))
+    ctx.restore()
+  }
 
   return y + 30
 }
 
 /**
  * 生成分享卡片图，返回一个图片 Blob（JPEG）。
- * @param {object} card src/data/cards.js 里的一张牌
+ * @param {object} card   src/data/cards.js 里的一张牌
+ * @param {string} advice **这一次抽到的那条**今日建议（不是从 card 里现挑的）
  * @returns {Promise<Blob>}
+ *
+ * ⚠️ advice 必须由调用方传进来，别在这里写 `card.advices[随机]`：
+ *    那样同一张牌页面显示第 2 条、分享图画第 4 条，用户一对比就露馅了。
+ *    传 null/undefined 时（理论上不该发生）退化成不画建议行，而不是画个 undefined。
  */
-export async function renderShareCard(card) {
+export async function renderShareCard(card, advice) {
   const { width: W, height: H } = SHARE_SIZE
   const [art, frame] = await Promise.all([
     loadFirst(ASSETS.cardFace(card.id)),
@@ -356,7 +364,7 @@ export async function renderShareCard(card) {
   probe.height = 2400
   const pctx = probe.getContext('2d')
   if (!pctx) throw new Error('当前浏览器不支持 Canvas 2D')
-  const contentBottom = drawContent(pctx, card, art, frame, W)
+  const contentBottom = drawContent(pctx, card, advice, art, frame, W)
 
   const canvas = document.createElement('canvas')
   canvas.width = W

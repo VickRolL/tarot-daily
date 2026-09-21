@@ -61,7 +61,9 @@ tarot-app/
 │   └─ cards/major-00.webp …     22 张大阿卡纳牌面（全部就位）
 ├─ src/config/skin.js            皮肤名、素材槽位、主视觉底板与锚点、卡框几何、动画时序
 ├─ src/config/lqip.js            首屏主视觉占位图（内联 data URI，脚本生成）
-├─ src/data/cards.js             22 张大阿卡纳文案（名称 / 关键词 / 牌意 / 今日建议）
+├─ src/data/cards.js             22 张大阿卡纳文案（名称 / 关键词 / 牌意 / **今日建议 3~5 条**）
+│                                今日建议是「抽到才揭晓」：抽牌那一刻随机取一条连同牌号一起落盘，
+│                                **牌之图鉴里看不到任何一条**（`CardDetail` 由「进来时的门」决定露不露）
 ├─ src/utils/shareCard.js        分享卡片图（Canvas 复刻牌面三层 + 竖版排版）
 ├─ src/utils/prefetch.js         牌面空闲预热
 ├─ src/hooks/useDrawState.js     抽牌记录（unlimited / daily 两种模式）

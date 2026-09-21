@@ -51,7 +51,7 @@ const itemVariants = (reduced) => ({
   }
 })
 
-export default function ReadingPanel({ card, mode, onAgain, onShare, onDetail }) {
+export default function ReadingPanel({ card, advice, mode, onAgain, onShare, onDetail }) {
   const reduced = useReducedMotion()
   const item = itemVariants(reduced)
 
@@ -82,8 +82,11 @@ export default function ReadingPanel({ card, mode, onAgain, onShare, onDetail })
         <motion.p className="panel__text" variants={item}>
           {card.meaning}
         </motion.p>
+        {/* 今日建议（第三十二轮起是「这张牌的 3~5 条里抽到的那一条」）——
+            文本由 App 传进来，这个组件**不挑**。挑的事在抽牌那一刻做过一次，
+            结果跟着 cardId 一起落在记录里。原因见 data/cards.js 的字段说明。 */}
         <motion.p className="panel__advice" variants={item}>
-          今日建议 · {card.advice}
+          今日建议 · {advice}
         </motion.p>
         {/* 宜 / 忌：只在**够高的视口**显示（见 index.css 的 min-height 查询）。
             矮视口强行塞进来会把面板顶到卡牌上 —— 那比「少显示一行」严重得多。

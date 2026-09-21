@@ -2118,6 +2118,21 @@ body {
   color: var(--gold);
 }
 
+/* 「今日建议」在图鉴里是**封着**的（第三十二轮）：这里只出现说明，不出现正文。
+   刻意压低对比度、并加一道虚线左边框 —— 它要和真正的正文一眼可分，
+   否则读者会以为「这块内容没加载出来」。
+   ⚠️ alpha 取 0.62 是有下限的：0.46 时合成到面板底色上实测只有 **3.0:1**，
+     低于正文级的 4.5:1（13px 也算正文尺寸）。0.62 实测 4.6:1 ——
+     既明显比正文淡（正文是 0.84），又不至于读不清。改这个数请重跑
+     scripts/out/_r32_sealed_measure.js 量一次对比度。 */
+.detail__text-body--sealed {
+  color: rgba(201, 180, 255, 0.62);
+  font-size: 13px;
+  padding-left: 14px;
+  border-left: 1px dashed rgba(201, 180, 255, 0.32);
+  text-align: left;
+}
+
 .detail__oath {
   display: flex;
   gap: 14px;

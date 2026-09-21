@@ -5,17 +5,22 @@
 > 未完成的工作看 **`NEXT_STEPS.md`**（含具体做法、优先级、成本与踩坑提醒）。
 > 每次有实质进展都要回来更新本文档的「当前阶段」与「变更日志」。
 
-最后更新：2026-09-21（第三十一轮：**给用户使用的那一版：声音默认开 + 开关改成喇叭图标** ——
+最后更新：2026-09-21（第三十二轮：**每张牌 3~5 条「今日建议」+ 图鉴里查不到** ——
+`cards.js` 的 `advice`（单条）改成 `advices`（3~5 条，合计 **90 条**，每条 ≤ 28 字），
+抽到牌那一刻随机取一条并把**取的是第几条**和 `cardId` 一起落盘（`adviceIndex`），
+刷新保证同一条；「牌之图鉴」走 `CardDetail` 的**无 advice 分支**，
+只显示一句「抽到这张牌时才会揭晓」，一个字的建议正文都不出现。
+详见 `NEXT_STEPS.md` §22。上一轮第三十一轮：**给用户使用的那一版：声音默认开 + 开关改成喇叭图标** ——
 缺省从「静音」翻成「开」，并由 `audio/autostart.js` 在**第一次用户手势**里兑现
 （浏览器不允许非手势起 AudioContext，所以「默认开」≠「一打开就出声」）；
 左上角那个开关从「圆点 + 声音开/关」收成 32px 的喇叭（开 = 喇叭 + 两声波，关 = 喇叭 + 叉），
-文字去掉后补 `aria-label` 兜无障碍。上一轮第三十轮：**桌面快捷方式 + 本地预览启动器** —— 桌面 `塔罗日签.lnk`
+文字去掉后补 `aria-label` 兜无障碍。再上一轮第三十轮：**桌面快捷方式 + 本地预览启动器** —— 桌面 `塔罗日签.lnk`
 双击即「必要时自动构建 → 起本地 http 服务 → 打开浏览器」；途中揭穿「手写 lnk 缺
 `LinkTargetIDList` → 双击报 WinError 1155」，改用系统 `IShellLink` 生成并以 `GetPath` 做判据。
 再上一轮第二十九轮：**v2 定稿存档** —— 用户认可四个音效，把当前版本存成第二版：
 `git tag v2` + 冻结快照 `_archive/v2-2026-09-21/` + 推送远端，并做了还原演练。
 冻结前体检揪出「快照会把 `.env.local` 烤进 zip」与「两个包的清单同名 → 只核到半个包却显示绿灯」
-两条静默故障，已修。详见 `NEXT_STEPS.md` §20 / §21）。
+两条静默故障，已修。详见 `NEXT_STEPS.md` §20 / §21 / §22）。
 
 > ### 音效现状：**四个音全部定稿并在站点在用**（用户已拍板，2026-09-21 第二十九轮：
 > ### 「很好，现在音效很符合我的需求」→ 随后存成 `v2`）。③ flip 为用户选定的 `s2-50`。
@@ -245,7 +250,12 @@ tarot-app/
     ├─ config/skin.js            ⭐ 皮肤名 / 素材槽位 / 底板与锚点 / 卡牌几何 / 时序（applySkinVars 灌 CSS 变量）
     ├─ config/lqip.js            ⚠️ 由 scripts/build_lqip.py 生成，不要手改
     ├─ data/cards.js             22 张大阿卡纳文案 + ALL_CARD_IDS。第二十一轮起每张多了
-    │                            `element` / `astrology` / `symbol` / `favor[2]` / `avoid[2]`
+    │                            `element` / `astrology` / `symbol` / `favor[2]` / `avoid[2]`。
+    │                            **第三十二轮：`advice`（单条）→ `advices`（3~5 条，合计 90 条）**，
+    │                            另有 `pickAdviceIndex()` / `adviceAt()` 两个纯函数。
+    │                            ⚠️ 硬约束：**每条 ≤ 28 字**（= 改造前最长那条的字数）。
+    │                            面板是「bottom 锚定 + 内容撑高」，建议多一行就压到卡牌上 ——
+    │                            这条由 `probe-panel-worst`（按每张牌**最长那条**量）守着
     ├─ data/whispers.js          ⭐ 两侧低语文案池（`WHISPER_LINES`：idle 22 条 + ritual 6 条 + `WHISPER_STATIC_STEP`）。
     │                            ⚠️ 导出名**不能**叫 `WHISPERS` —— `skin.js` 里那个是版式配置，重名会静默串用
     ├─ audio/                    ⭐ 声音：**BGM 与音效都用 AI 素材**（音效第二十五轮接完），合成路只剩兜底
@@ -294,12 +304,18 @@ tarot-app/
     │                               与 `probe-fonts.mjs` 的 `EXPECTED`。详见 NEXT_STEPS §2 P2 / §13
     ├─ utils/shareCard.js        ⭐ 分享卡片图（Canvas 三层复刻牌面 + 竖版排版）
     ├─ utils/prefetch.js         ⭐ 牌面空闲预热（避免首次抽牌时插画还在下载）
-    ├─ hooks/useDrawState.js     抽牌记录（unlimited / daily）+ readTodayRecord()（供首屏同步判断）
+    ├─ hooks/useDrawState.js     抽牌记录（unlimited / daily）+ readTodayRecord()（供首屏同步判断）。
+    │                            **记录里有 `adviceIndex`**（第三十二轮）：今天这张牌给的是第几条建议。
+    │                            旧记录没有这个字段是**正常情况** → `adviceAt()` 兜底第 0 条，
+    │                            不许现随机一条（那样刷新一次换一句话，「今日」就站不住了）
     ├─ hooks/useAssetUrl.js      素材多格式探测（webp → png）
     ├─ index.css                 主题变量 + 全部视觉样式（含「迎接动画 · 信封」一节）
     └─ components/               App / HeroStage / EnvelopeWelcome / MistLayer / ParticleField
                                  / CrystalOrb / CardReveal / CardFace / SmartImage
-                                 / CardGallery（用户可开的「牌之图鉴」）/ CardDetail（完整解读覆盖层）
+                                 / CardGallery（用户可开的「牌之图鉴」）/ CardDetail（完整解读覆盖层；
+                                   **今日建议在这里分两条互斥分支**，第三十二轮：
+                                   面板进来带 `advice` → 照常显示；图鉴进来不带 → `data-advice="sealed"`，
+                                   只写一句「抽到这张牌时才会揭晓」。判据是**门**，不是「牌是不是今天那张」）
                                  / WhisperTags（两侧漂浮低语）
                                  / SoundToggle（声音开关：**喇叭图标**，左上角、品牌下方；第三十一轮）
                                  / ReadingPanel / ShareDialog / DevBar
@@ -1991,3 +2007,76 @@ APP_URL=http://127.0.0.1:4199/ "$N" scripts/run-flows.mjs audit-title audit-draw
 - **顺手修的两处文档漂移**：`App.jsx` 里 `SoundToggle` 上方写着「放右下角」（实现一直是左上角）；
   顶部「音效现状」还写着「① charge · ② burst · ④ reveal **待用户耳朵最终确认**」，
   而用户在第二十九轮已经说了「现在音效很符合我的需求」→ 改成「四个音全部定稿」，并注明下面那段是证据链不是待办。
+
+### 第三十二轮 · 每张牌 3~5 条今日建议 + 图鉴里查不到（2026-09-21）
+
+用户：「我预想的是每一张卡牌被抽到时都会有 3-5 种不同的今日建议，而这些今日建议是**不能在牌之图鉴里查看的**」。
+
+**① 数据：`advice` → `advices`**
+
+- `cards.js` 每张牌的 `advice: '…'` 改成 `advices: [...]`，**合计 90 条**（两张 5 条，其余 4 条）。
+- **原来的那一句逐字保留为第 0 条** —— 用户已经看过它、旧分享图上印的也是它，
+  悄悄换掉等于改了已交付的内容。改写脚本 `scripts/_apply_r32_advices.py` 把这件事写成断言。
+- **每条 ≤ 28 字**（= 改造前最长那条的字数）。为什么是硬约束：解读面板是
+  「bottom 锚定 + 内容撑高」，可用高度只有视口高的 38.5%。上限压住，面板高度就不会比改造前更坏 ——
+  这是一条**能被证明的不回归**，比「大概不会更高」可靠。
+- 同牌内不重复、**跨牌也不许重复**（同一句话出现在两张牌上，读起来就是模板腔）。
+- 新增两个纯函数：`pickAdviceIndex(card, rand)` / `adviceAt(card, index)`。
+  `adviceAt` 对**越界 / 非整数 / null / 缺字段**一律兜底第 0 条，**绝不返回 undefined** ——
+  它是记录读取（旧记录、手改过的记录）唯一的收口。
+
+**② 选取必须落盘，不能现挑**
+
+- 抽牌那一刻 `pickAdviceIndex()` 定下一条，和 `cardId` 一起写进记录（`adviceIndex`）。
+- ⚠️ 若在渲染里现挑现用，**React 每重渲染一次就换一条**：面板挂载、鼠标划过、
+  开一次「完整解读」都会换字 —— 「今日建议」会变成「每帧建议」。
+- 回访（刷新）时从记录里恢复；**旧记录没有这个字段时不重挑**，交给 `adviceAt()` 兜底第 0 条。
+- 分享图吃同一个值：`renderShareCard(card, advice)` 的 advice 由调用方传入，
+  **不许它自己去 `card.advices` 里挑** —— 那样页面显示第 2 条、图上画第 4 条，一对比就露馅。
+
+**③ 图鉴里必须查不到（本轮真正的难点）**
+
+- 判据是**「从哪扇门进来」**，不是「这张牌是不是今天抽到的」。
+  后者会漏掉一条真实路径：用户今天抽到塔，再从图鉴点「塔」—— 对象是同一个，
+  按「比较牌对象」实现就会把建议露出来。
+- 所以 `CardDetail` 收一个**可选** `advice`：面板 → 完整解读带上（它就正显示在面板上，
+  藏起来反像少了一块）；图鉴 → 不带，渲染 `data-advice="sealed"` 的一句说明。
+- 新增 `.detail__text-body--sealed` 样式：压低对比度 + 虚线左边框，让它一眼区别于正文。
+  ⚠️ **alpha 有下限**：0.46 时合成到底色实测只有 **3.0:1**（低于 13px 正文要的 4.5:1），
+  调到 0.62 → **4.64:1**（正文对照 10.8:1，仍然明显更淡）。
+  量法见 `scripts/out/_r32_sealed_measure.js`：**必须先把 alpha 合成到底色再算**，
+  否则会把半透明色当不透明色算出一个虚高的数（第一版就报了 10.77）。
+
+**④ 探针**
+
+- 新增 **`scripts/flows/probe-advice.js`**（7 条判据，**只能在 `vite dev` 下跑**：
+  要从源码模块 `import('/src/data/cards.js')` 拿数据，还要按 devbar 切模式）：
+  数据口径（条数 / 字数上限 / 同牌与跨牌不重复 / 无空行）· 两个纯函数的边界（含越界与非整数）·
+  **图鉴零泄露**（22 张逐张点进详情，在整段文本里搜该牌的任何一条建议原文 + 结构标记）·
+  **`adviceIndex` 回放**（逐个下标种进记录，面板上必须逐字对上）· **旧记录兜底**（不崩、且稳定回第 0 条）·
+  **分享图同一条**（换一条建议 → 字节必须变；同一条画两次 → 字节必须逐字节一致）·
+  **同一张牌从图鉴点回去也是封着的**。
+- `probe-panel-worst.js` 升级：以前每张牌只有一条建议，套进去就穷尽了；现在多了一维随机性，
+  改成 **每张牌只量它最长的那条**（并列取靠前），那才是真最坏情况；顺手多断言
+  「种进去的那条真的回放到面板上」。
+- `probe-gallery.js` 的判据**从「块数」改成「标签序列」**：封着的那块本身也是一个
+  `.detail__block`、也有一段够长的说明文字 —— 旧的 `blocks.length === 3 && every(len >= 20)`
+  会**照样通过**（断言绿着、含义已经变了）。现在断言
+  `象征|正位含义|今日建议` 逐个相等 + `sealed` 且没有 `.detail__text-body--advice`。
+
+**验收（生产 `dist/` + 开发服务器两套实测）**：
+
+| 探针 | 跑在哪 | 结果 |
+|---|---|---|
+| `probe-advice` | dev | `ALL_PASS`（7/7；90 条、最长 28 字、图鉴 22 张零泄露、5 个下标回放全对上、旧记录兜底、分享图随建议变字节） |
+| `probe-panel-worst` | dev | `ALL_PASS`，22/22 张最坏净空 **39.2px**（与改造前逐字节相同） |
+| `probe-gallery` | dev + dist | `ALL_PASS`（标签序列 `象征\|正位含义\|今日建议`，sealed ✓ / 无建议正文 ✓） |
+| `probe-sfx` / `probe-ambient` / `probe-sound-default` / `probe-sfx-off` | dist | 全部 `ALL_PASS`（音频 `dist/` 回归 5 个 mp3 全 200） |
+| `audit-draw` / `audit-title` / `share` / `reveal` / `dev-verify` | dist / dev | 全过；`audit-draw` 净空 39.2px、`share` 出图 1080×1920、`adviceShown` 真 |
+
+- **一个环境坑（本轮踩到，值得记住）**：`scripts/launch_preview.mjs` 在端口被占时会**自动往后找**，
+  所以它「说」起在 4188、实际落在 **4189**；而 4188 上残留着上一轮的一个 **dev** 服务，
+  它对 `/assets/*.mp3` 一律回退成 `index.html`。第一次跑「产物回归」因此打在了 dev 上，
+  音频四条判据全红（`mp3Fetches: []`、`sfxDownload: false`）——
+  **看着像功能坏了，其实是打错了服务器**。判据：先问一句「这个端口上真的是我要的那份产物吗」
+  （`__preview_ping` 只有本项目自己的服务会回 `tarot-daily-preview`）。

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { DEV_TOOLS, EASE, INITIAL_MODE, TIMING, WELCOME, drawBeats, ritual } from './config/skin'
-import { ALL_CARD_IDS, CARD_BY_ID, pickRandomCard } from './data/cards'
+import { ALL_CARD_IDS, CARD_BY_ID, adviceAt, pickAdviceIndex, pickRandomCard } from './data/cards'
 import { readTodayRecord, useDrawState } from './hooks/useDrawState'
 import { markCardWarmed, prefetchCards } from './utils/prefetch'
 import HeroStage from './components/HeroStage'
@@ -65,6 +65,16 @@ export default function App() {
   const [mode, setMode] = useState(INITIAL_MODE)
   const [phase, setPhase] = useState(greet ? 'welcome' : 'entrance')
   const [currentCard, setCurrentCard] = useState(null)
+  /**
+   * 这一次抽到的牌给的是第几条「今日建议」（第三十二轮）。
+   *
+   * ⚠️ 必须是 state，**不能**在渲染里现随机 —— 抽到的牌值不值得重渲染决定了
+   * 这个下标能不能活下来：面板挂载、鼠标划过、开关详情都会触发重渲染，
+   * 那时候重选一次，用户就会看到建议自己变了。所以抽牌那一刻定下来，
+   * 之后（含刷新）一路带着走。
+   * 为 null 表示「还没有/已复位」，`adviceAt()` 会兜底成第 0 条。
+   */
+  const [adviceIndex, setAdviceIndex] = useState(null)
   const [entranceDone, setEntranceDone] = useState(false)
   /**
    * 图鉴与「完整解读」是**两层**，可以叠着。
@@ -74,6 +84,18 @@ export default function App() {
    */
   const [galleryOpen, setGalleryOpen] = useState(false)
   const [detailCard, setDetailCard] = useState(null)
+  /**
+   * 「完整解读」这一层是从哪儿进来的，决定了**它给不给看今日建议**。
+   *
+   * 用户的要求（第三十二轮）：今日建议**不能在牌之图鉴里查看** —— 图鉴一摊开
+   * 就能把 22 张的建议全读完，「抽到才揭晓」这件事就没了。
+   * 而面板里那个「完整解读」是**刚抽到的牌**，那条建议本来就正显示在上面，
+   * 藏起来反而像内容缺了一块。
+   *
+   * 所以判据不是「这张牌是不是今天抽到的」（从图鉴点回来会撞上同一个对象），
+   * 而是**进来的门是哪一扇**。用状态记住它，比在渲染里比较对象可靠。
+   */
+  const [detailAdvice, setDetailAdvice] = useState(null)
   const [shareCard, setShareCard] = useState(null)
   const timers = useRef([])
 
@@ -88,6 +110,14 @@ export default function App() {
    */
   const beats = useMemo(() => drawBeats(reduced), [reduced])
   const rite = useMemo(() => ritual(reduced), [reduced])
+
+  /**
+   * 这一次该显示的那条今日建议（第三十二轮）。
+   * 纯派生量：`adviceIndex` 是抽牌时定下并落盘的那个数，这里只负责取文本 ——
+   * **绝不在这里调 `Math.random()`**。越界/缺字段的兜底也交给 `adviceAt()` 一处实现，
+   * 免得面板、详情、分享图三处各写一份「取不到怎么办」。
+   */
+  const advice = useMemo(() => adviceAt(currentCard, adviceIndex), [currentCard, adviceIndex])
 
   const clearTimers = useCallback(() => {
     timers.current.forEach(clearTimeout)
@@ -140,6 +170,9 @@ export default function App() {
     const card = CARD_BY_ID[record.cardId]
     if (!card) return
     setCurrentCard(card)
+    /* 建议照记录复原：旧记录没有这个字段时是 undefined，`adviceAt()` 会兜底。
+       这里**不要**再随机一条 —— 刷新一次换一句话，「今日」两个字就没意义了。 */
+    setAdviceIndex(Number.isInteger(record.adviceIndex) ? record.adviceIndex : null)
     setPhase('revealed')
   }, [mode, record, welcomeDone, phase])
 
@@ -147,9 +180,14 @@ export default function App() {
     if (phase !== 'idle') return
     const b = beats
     const card = pickRandomCard()
+    /* 今日建议：抽牌这一刻从这张牌的 3~5 条里随机取一条（第三十二轮）。
+       和 cardId 一起落盘 —— 只有「同一张牌 + 同一条建议」都记住，
+       刷新后才真的还是今天那一签。 */
+    const adviceIdx = pickAdviceIndex(card)
     /* 立刻落盘：仪式再长也只有 5.6s，但用户完全可能在中途关页 ——
        先写记录，回来时这张牌就是今天的牌 */
-    save(card.id)
+    save(card.id, adviceIdx)
+    setAdviceIndex(adviceIdx)
     markCardWarmed(card.id)
     // 这一张已经渲染过了，顺手再补几张没下过的
     prefetchCards(ALL_CARD_IDS, 3)
@@ -202,6 +240,7 @@ export default function App() {
     setShareCard(null)
     if (mode === 'daily') reset()
     setCurrentCard(null)
+    setAdviceIndex(null)
     setPhase('idle')
   }, [mode, reset, clearTimers])
 
@@ -211,10 +250,28 @@ export default function App() {
       setShareCard(null)
       setMode(next)
       setCurrentCard(null)
+      setAdviceIndex(null)
       setPhase('idle')
     },
     [clearTimers]
   )
+
+  /** 从解读面板进「完整解读」：带上刚抽到的那条今日建议 */
+  const openDetailFromPanel = useCallback(() => {
+    setDetailAdvice(advice)
+    setDetailCard(currentCard)
+  }, [advice, currentCard])
+
+  /** 从牌之图鉴进退：**一律不带建议**（这是我们唯一的口径，别在这里加分支） */
+  const openDetailFromGallery = useCallback((card) => {
+    setDetailAdvice(null)
+    setDetailCard(card)
+  }, [])
+
+  const closeDetail = useCallback(() => {
+    setDetailCard(null)
+    setDetailAdvice(null)
+  }, [])
 
   /**
    * 开发用：重播迎接动画。
@@ -327,15 +384,24 @@ export default function App() {
       {phase === 'revealed' && currentCard && (
         <ReadingPanel
           card={currentCard}
+          advice={advice}
           mode={mode}
           onAgain={handleAgain}
           onShare={() => setShareCard(currentCard)}
-          onDetail={() => setDetailCard(currentCard)}
+          onDetail={openDetailFromPanel}
         />
       )}
 
       <AnimatePresence>
-        {shareCard && <ShareDialog card={shareCard} onClose={() => setShareCard(null)} />}
+        {shareCard && (
+          <ShareDialog
+            card={shareCard}
+            /* 分享图上的建议必须与页面上**是同一条**：传当前这条，
+               而不是让 shareCard.js 自己去挑（第三十二轮）。 */
+            advice={adviceAt(shareCard, adviceIndex)}
+            onClose={() => setShareCard(null)}
+          />
+        )}
       </AnimatePresence>
 
       {DEV_TOOLS && (
@@ -349,12 +415,16 @@ export default function App() {
         />
       )}
 
-      {/* 图鉴对所有用户开放（入口在顶栏）。它只负责「选」，阅读交给下面那层。 */}
-      {galleryOpen && <CardGallery onClose={() => setGalleryOpen(false)} onPick={setDetailCard} />}
+      {/* 图鉴对所有用户开放（入口在顶栏）。它只负责「选」，阅读交给下面那层。
+          ⚠️ 从图鉴进去的那条路径**不传 advice** —— 今日建议只在抽到时揭晓。 */}
+      {galleryOpen && (
+        <CardGallery onClose={() => setGalleryOpen(false)} onPick={openDetailFromGallery} />
+      )}
 
       {/* 完整解读：从图鉴点进来、或从解读面板的「完整解读」进来，都是这一层。
-          叠在图鉴上面，关掉即回到图鉴，所以不需要返回按钮。 */}
-      {detailCard && <CardDetail card={detailCard} onClose={() => setDetailCard(null)} />}
+          叠在图鉴上面，关掉即回到图鉴，所以不需要返回按钮。
+          `advice` 由**进来的门**决定（面板带、图鉴不带），见 detailAdvice 的注释。 */}
+      {detailCard && <CardDetail card={detailCard} advice={detailAdvice} onClose={closeDetail} />}
 
       {!entranceDone && (
         <motion.div

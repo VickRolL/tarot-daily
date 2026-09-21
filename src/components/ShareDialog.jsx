@@ -9,7 +9,7 @@ import { downloadBlob, renderShareCard } from '../utils/shareCard'
  *   - 移动端可以长按图片保存到相册
  * 生成失败时给出明确提示，不会白弹一个空窗。
  */
-export default function ShareDialog({ card, onClose }) {
+export default function ShareDialog({ card, advice, onClose }) {
   const [status, setStatus] = useState('loading')
   const [url, setUrl] = useState(null)
   const [blob, setBlob] = useState(null)
@@ -19,7 +19,7 @@ export default function ShareDialog({ card, onClose }) {
     let cancelled = false
     let objectUrl = null
 
-    renderShareCard(card)
+    renderShareCard(card, advice)
       .then((result) => {
         if (cancelled) return
         objectUrl = URL.createObjectURL(result)
@@ -38,7 +38,9 @@ export default function ShareDialog({ card, onClose }) {
       cancelled = true
       if (objectUrl) URL.revokeObjectURL(objectUrl)
     }
-  }, [card])
+    /* advice 进依赖：它是抽牌时定下的那条，理论上和 card 同生共死；
+       真出现「同牌不同建议」时（比如调试时手改了记录），这张图要重画。 */
+  }, [card, advice])
 
   useEffect(() => {
     const onKey = (e) => {

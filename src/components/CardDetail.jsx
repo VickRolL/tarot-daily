@@ -17,8 +17,22 @@ import CardFace from './CardFace'
  * ── 复用 ────────────────────────────────────────────────────────────
  * 图鉴点某张牌、面板点「完整解读」，进来的都是这一层（同一份内容、同一套渲染）。
  * 从图鉴进来时它只是叠在图鉴上面，关掉即回到图鉴 —— 所以不用「返回」按钮。
+ *
+ * ── 今日建议：这里是**唯一**要区分「从哪扇门进来」的地方（第三十二轮）──────
+ * 用户的要求：每张牌备 3~5 条今日建议，抽到哪条算哪条，**而且不能在牌之图鉴里查看**。
+ *
+ * 所以 `advice` 是**可选** prop：
+ *   · 面板 → 完整解读：把刚抽到的那条传进来，照常显示（它就正显示在面板上，
+ *     在这里藏起来反而像少了一块）；
+ *   · 图鉴 → 完整解读：不传。这里渲染一句「抽到才揭晓」的说明，**一个字的建议
+ *     正文都不出现**。
+ * 判据是「进来的门是哪一扇」，不是「这张牌今天抽到过没有」——
+ * 后者会漏：用户从图鉴点回今天抽到的那张，对象是同一个。
+ *
+ * 守这条口径的是 `scripts/flows/probe-advice.js` 与 `probe-gallery.js`：
+ * 后者会遍历 `.detail` 的整段文本，确认里面找不到该牌的任何一条建议原文。
  */
-export default function CardDetail({ card, onClose }) {
+export default function CardDetail({ card, advice, onClose }) {
   const closeRef = useRef(null)
 
   /* Esc 关闭 + 进来先把焦点挪到关闭键上（键盘用户不至于迷失在背后的页面上） */
@@ -79,10 +93,22 @@ export default function CardDetail({ card, onClose }) {
               <p className="detail__text-body">{card.meaning}</p>
             </section>
 
-            <section className="detail__block">
-              <h3 className="detail__label">今日建议</h3>
-              <p className="detail__text-body detail__text-body--advice">{card.advice}</p>
-            </section>
+            {/* 今日建议：两条互斥分支。图鉴那条**只写说明、不写建议**。
+                `data-advice` 是给探针用的结构标记 —— 靠它断言「哪一条分支在渲染」，
+                比在整页文本里搜字符串可靠（免得某张牌的象征文案里恰好有类似措辞）。 */}
+            {advice ? (
+              <section className="detail__block" data-advice="revealed">
+                <h3 className="detail__label">今日建议</h3>
+                <p className="detail__text-body detail__text-body--advice">{advice}</p>
+              </section>
+            ) : (
+              <section className="detail__block" data-advice="sealed">
+                <h3 className="detail__label">今日建议</h3>
+                <p className="detail__text-body detail__text-body--sealed">
+                  抽到这张牌时才会揭晓。每张牌都备了几条，具体是哪一条，抽到那一刻才知道。
+                </p>
+              </section>
+            )}
 
             <div className="detail__oath">
               <section className="detail__oath-col detail__oath-col--favor">
