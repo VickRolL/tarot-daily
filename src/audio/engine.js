@@ -20,7 +20,12 @@
  *     **凡是在 50ms 内把能量堆到 200Hz 以下的写法，一律不许出现。**
  *
  * ── 三条不可让步的规矩（沿用第二十二轮）────────────────────────────────
- *   ① **默认关闭**。理由一半是礼貌，一半是浏览器策略。
+ *   ① **意图默认开**（2026-09-21 第三十一轮改；用户：「给用户使用的版本默认要打开音乐」）。
+ *      旧版是默认静音，理由「不打招呼就出声不礼貌」。改口径之后这条理由仍然成立 ——
+ *      因为**声音真正响起来永远晚于用户的第一次操作**（规矩②，浏览器不让自动播放）。
+ *      换句话说：页面加载那一刻是安静的，用户一碰屏幕 / 一敲键盘，音乐才淡入。
+ *      代价是「默认开」这件事必须由 `audio/autostart.js` 在第一次手势里兑现，
+ *      光把这里的缺省值改成 true 是不够的。
  *   ② **AudioContext 只在用户手势里创建/恢复**（`unlock()`）。
  *      非手势里建出来的 ctx 会被挂成 suspended，而且**不报错**，只是安静地哑掉。
  *   ③ **所有增益都走包络**，不许 `gain.value = x` 硬切 —— 硬切必有爆音。
@@ -41,17 +46,32 @@ let ctx = null
 let master = null
 let reverbNode = null
 let noiseBuf = null
-let enabled = false
+/* ⚠️ 初值必须**跟意图一致**，不能写死 false。
+   写死 false 的话，「默认开」在**点击水晶球**这条路径上会静默失效：
+   `handleDraw` 用 `isSoundOn()` 当门（见 App.jsx），门是关的 → 不 unlock、不起 BGM、
+   蓄势音也不播 —— 而页面一切正常、控制台干净，只是没声音。
+   读一次 localStorage 是同步的、没有副作用，放在模块初始化这里比等 effect 更早。 */
+let enabled = readSoundPref()
 
 /* ---------------------------------------------------------------- 开关状态 */
 
 export const isSoundOn = () => enabled
 
+/**
+ * 读「要不要声音」的意图。**缺省 = 开**（第三十一轮）。
+ *
+ * 判据写成 `!== 'off'` 而不是 `=== 'on'`：只有用户**明确关过**才算关。
+ * 写成 `=== 'on'` 的话「从没表过态」会退回静音 —— 默认开被悄悄吃掉，
+ * 而且这种错没有症状（页面就是安静，跟以前一模一样），只能靠这条注释和探针守住。
+ *
+ * 存储不可用（隐私模式 / 被策略拦）时同样返回开：意图是「开」，
+ * 真起不起得来由 autostart 在用户手势里去试（那时候 `unlock()` 会给答案）。
+ */
 export function readSoundPref() {
   try {
-    return window.localStorage.getItem(STORE_KEY) === 'on'
+    return window.localStorage.getItem(STORE_KEY) !== 'off'
   } catch {
-    return false
+    return true
   }
 }
 
@@ -117,6 +137,14 @@ export function unlock() {
 
 /** 总线。BGM 与音效都挂在它下面，这样「整体音量」只有一个地方可调 */
 export const masterBus = () => master
+
+/**
+ * 只读地看当前 AudioContext，**没有就返回 null，不会顺手建一个**。
+ * 为什么不能直接导出 `audio()` 去查：`audio()` 是「拿到（必要时创建）」——
+ * 在非手势里调它就会造出一个 suspended 的 ctx，于是「默认开、但还没出声」
+ * 这件事被查询动作本身破坏掉。诊断与探针必须用这个。
+ */
+export const peekAudioContext = () => ctx
 
 /** 白噪声缓冲（只生成一次，2s 足够所有循环与短音复用） */
 export function noiseBuffer(c) {

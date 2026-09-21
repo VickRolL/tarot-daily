@@ -55,19 +55,27 @@ out.autoplayWarns = warns
 out.welcomeAwayMs = await waitFor(() => !$('.welcome'), 14000)
 await waitFor(() => $('.scene')?.dataset.phase === 'idle', 9000)
 
-/* ── 先看清初始状态（必须是关的）─────────────────────────────────── */
+/* ── 先看清初始状态（第三十一轮起缺省是**开**）───────────────────── */
 const btn = $('.sound')
 out.toggle = btn
   ? {
       exists: true,
       pressed: btn.getAttribute('aria-pressed'),
-      label: btn.textContent.trim(),
+      ariaLabel: btn.getAttribute('aria-label'),
+      hasIcon: !!btn.querySelector('svg.sound__icon'),
       pref: localStorage.getItem('tarot.sound')
     }
   : { exists: false }
 
-/* 初始必须是「关」——不是靠文案，靠 aria-pressed 与 localStorage 两处同时为否 */
-out.PASS_initOff = !!btn && btn.getAttribute('aria-pressed') === 'false' && localStorage.getItem('tarot.sound') !== 'on'
+/* 初始必须是「开」：
+   `aria-pressed` 为真，且 localStorage 里**没有 'off'**。
+   ⚠️ 判据是「不是 off」，不是「等于 on」—— 缺省开不写存储（见 engine.readSoundPref），
+      写成 `=== 'on'` 会在「首次访问」这个主场景下假红。 */
+out.PASS_initOn =
+  !!btn &&
+  btn.getAttribute('aria-pressed') === 'true' &&
+  btn.getAttribute('aria-label') === '声音' &&
+  localStorage.getItem('tarot.sound') !== 'off'
 
 /* ── 装钩子：必须在第一次点击之前 ────────────────────────────────── */
 
@@ -138,9 +146,14 @@ if (Orig) {
   wrap('createBiquadFilter', 'filter')
 }
 
-/* ── ① 点开关 ─────────────────────────────────────────────────────── */
+/* ── ① 第一次手势（第三十一轮起不是「点开关」）───────────────────────
+   缺省就是开，所以这一下**不能点在开关上** —— 那会把声音关掉。
+   点在页面空白处：等价于用户进场后的第一次触摸，由 `audio/autostart.js` 接管，
+   它负责 unlock + 起 BGM。这同时验证了「用户不必先找到那个喇叭」。
+   （程序化 `.click()` 在 `Runtime.evaluate {userGesture:true}` 下也算一次激活 ——
+     这就是下面 `ctxState === 'running'` 能成立的原因。） */
 const beforeClick = { made: made.length, userActive: !!navigator.userActivation?.isActive }
-btn.click()
+document.body.click()
 await sleep(220)
 
 out.afterClick = {
@@ -149,15 +162,18 @@ out.afterClick = {
   ctxState: made[0]?.state ?? null,
   sampleRate: made[0]?.sampleRate ?? null,
   pressed: btn.getAttribute('aria-pressed'),
-  label: btn.textContent.trim(),
+  ariaLabel: btn.getAttribute('aria-label'),
   pref: localStorage.getItem('tarot.sound'),
   gainNodes: count.gain
 }
 out.PASS_engineStart = made.length === 1 && made[0]?.state === 'running' && count.gain >= 1
-out.PASS_persisted = btn.getAttribute('aria-pressed') === 'true' && localStorage.getItem('tarot.sound') === 'on'
+/* 第一次手势之后开关必须**还是开**（autostart 不许把状态翻掉），
+   且存储里仍然不是 'off'。 */
+out.PASS_stillOn = btn.getAttribute('aria-pressed') === 'true' && localStorage.getItem('tarot.sound') !== 'off'
 
 /* ── ②·五 素材预载（第二十五轮新增）──────────────────────────────────
-   点开关的那一刻 unlock() 会派发 tarot:audio-ready → sfx 开始 fetch+decode。
+   `unlock()` 的那一刻会派发 tarot:audio-ready → sfx 开始 fetch+decode
+   （第三十一轮起这个 unlock 由第一次手势触发，不再是点开关）。
    必须等它完成再抽牌：否则第一声 charge 播的时候缓冲还没好，
    会悄悄走合成路 —— 探针若不在这里等齐，「素材优先」就成了永假的绿灯。
    终止条件：loaded + failed === assets（每一个都见到结果，成功或失败都算）。 */
@@ -349,8 +365,16 @@ out.toggleVsPanel = (() => {
 /* ── ③ 关掉 ───────────────────────────────────────────────────────── */
 btn.click()
 await sleep(150)
-out.afterOff = { pressed: btn.getAttribute('aria-pressed'), pref: localStorage.getItem('tarot.sound'), label: btn.textContent.trim() }
+out.afterOff = {
+  pressed: btn.getAttribute('aria-pressed'),
+  pref: localStorage.getItem('tarot.sound'),
+  waves: btn.querySelectorAll('.sound__wave').length,
+  hasIcon: !!btn.querySelector('svg.sound__icon')
+}
 out.PASS_offAgain = btn.getAttribute('aria-pressed') === 'false' && localStorage.getItem('tarot.sound') === 'off'
+/* 关掉之后声波必须消失、图标仍在（关状态是「喇叭 + 叉」）——
+   只改颜色不改形状的话，「开/关」在小尺寸下几乎看不出区别 */
+out.PASS_iconSwitches = out.afterOff.waves === 0 && out.afterOff.hasIcon
 
 out.autoplayWarns = warns.filter((w) => /AudioContext|autoplay|not allowed/i.test(w))
 out.PASS_noAutoplayWarn = out.autoplayWarns.length === 0
@@ -358,8 +382,8 @@ out.PASS_noErrors = out.errors.length === 0
 
 out.PASS = {
   toggleExists: !!btn,
-  initOff: out.PASS_initOff,
-  persisted: out.PASS_persisted,
+  initOn: out.PASS_initOn,
+  stillOn: out.PASS_stillOn,
   engineStart: out.PASS_engineStart,
   sfxDownload: out.PASS_sfxDownload,
   sfxAssetPath: out.PASS_sfxAssetPath,
@@ -372,6 +396,7 @@ out.PASS = {
   toggleAlwaysClickable: out.toggleHitIsSelf && out.toggleHitAfterPanel,
   orbStillHittable: out.orbHittable === 'orb',
   offAgain: out.PASS_offAgain,
+  iconSwitches: out.PASS_iconSwitches,
   noAutoplayWarn: out.PASS_noAutoplayWarn,
   noErrors: out.PASS_noErrors
 }

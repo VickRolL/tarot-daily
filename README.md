@@ -66,6 +66,12 @@ tarot-app/
 ├─ src/utils/prefetch.js         牌面空闲预热
 ├─ src/hooks/useDrawState.js     抽牌记录（unlimited / daily 两种模式）
 ├─ src/hooks/useAssetUrl.js      素材多格式探测（webp → png）
+├─ src/audio/                    声音：BGM 与四个音效，**都是 AI 素材、合成兜底**
+│   ├─ engine.js                 底座：ctx / 总线 / 程序化厅堂混响 / 包络工具
+│   ├─ autostart.js              「缺省开」的兑现：第一次用户手势里 unlock + 起 BGM
+│   │                            （浏览器不允许非手势启动 AudioContext，所以缺省开 ≠ 一打开就出声）
+│   ├─ ambient.js                环境音（`assets/audio/ambient-loop.mp3` 60s 无缝循环）
+│   └─ sfx.js                    四个音效（蓄势 / 释放 / 翻牌 / 揭晓），素材 + 合成兜底
 ├─ src/components/               场景分层组件
 │   ├─ EnvelopeWelcome.jsx       迎接动画：全屏斜置的信封开启（纯代码绘制）
 │   ├─ HeroStage.jsx             主视觉底板：背景层 + 人物层 + 水晶球（图像坐标系）
@@ -75,9 +81,12 @@ tarot-app/
 │   ├─ CardReveal.jsx            抽牌 + 3D 翻牌
 │   ├─ CardFace.jsx              牌面三层（插画 / 卡框 / 文字），抽牌与总览共用
 │   ├─ SmartImage.jsx            图片多格式回退
-│   ├─ CardGallery.jsx           牌面总览（开发模式，核对边框与缺图）
+│   ├─ CardGallery.jsx           牌面图鉴（**用户可开**，入口在顶栏「牌之图鉴」）
+│   ├─ CardDetail.jsx            完整解读覆盖层（从图鉴或解读面板进来）
 │   ├─ ReadingPanel.jsx          牌意解读面板
 │   ├─ ShareDialog.jsx           分享卡片图弹窗
+│   ├─ SoundToggle.jsx           声音开关：**喇叭图标**，左上角品牌下方。
+│   │                            缺省开，真正起播在第一次用户手势里（`src/audio/autostart.js`）
 │   └─ DevBar.jsx                开发调试条
 └─ src/index.css                 主题变量 + 全部视觉样式
 ```

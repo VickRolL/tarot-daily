@@ -42,12 +42,15 @@ if (argv.includes('--list')) {
 
 const names = []
 const passthrough = []
+/* ⚠️ 这里必须列出**所有带值**的 shot.mjs 开关。漏一个的后果不是「参数无效」，
+   而是那个值会被当成**下一个 flow 名字**（`--seed "..."` 的 JS 被拿去拼路径 →
+   「找不到 scripts/flows/localStorage.setItem(...).js」）。加新开关时同步这里。 */
+const VALUED = ['--w', '--h', '--wait', '--chrome', '--profile', '--dpr', '--seed', '--eval', '--eval-file']
 for (let i = 0; i < argv.length; i += 1) {
   const a = argv[i]
   if (a.startsWith('--')) {
     passthrough.push(a)
-    /* 这几个开关后面要跟一个值 */
-    if (['--w', '--h', '--wait', '--chrome', '--profile', '--dpr'].includes(a)) {
+    if (VALUED.includes(a)) {
       passthrough.push(argv[++i])
     }
   } else {

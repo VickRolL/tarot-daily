@@ -5,16 +5,21 @@
 > 未完成的工作看 **`NEXT_STEPS.md`**（含具体做法、优先级、成本与踩坑提醒）。
 > 每次有实质进展都要回来更新本文档的「当前阶段」与「变更日志」。
 
-最后更新：2026-09-21（第三十轮：**桌面快捷方式 + 本地预览启动器** —— 桌面 `塔罗日签.lnk`
+最后更新：2026-09-21（第三十一轮：**给用户使用的那一版：声音默认开 + 开关改成喇叭图标** ——
+缺省从「静音」翻成「开」，并由 `audio/autostart.js` 在**第一次用户手势**里兑现
+（浏览器不允许非手势起 AudioContext，所以「默认开」≠「一打开就出声」）；
+左上角那个开关从「圆点 + 声音开/关」收成 32px 的喇叭（开 = 喇叭 + 两声波，关 = 喇叭 + 叉），
+文字去掉后补 `aria-label` 兜无障碍。上一轮第三十轮：**桌面快捷方式 + 本地预览启动器** —— 桌面 `塔罗日签.lnk`
 双击即「必要时自动构建 → 起本地 http 服务 → 打开浏览器」；途中揭穿「手写 lnk 缺
 `LinkTargetIDList` → 双击报 WinError 1155」，改用系统 `IShellLink` 生成并以 `GetPath` 做判据。
-上一轮第二十九轮：**v2 定稿存档** —— 用户认可四个音效，把当前版本存成第二版：
+再上一轮第二十九轮：**v2 定稿存档** —— 用户认可四个音效，把当前版本存成第二版：
 `git tag v2` + 冻结快照 `_archive/v2-2026-09-21/` + 推送远端，并做了还原演练。
 冻结前体检揪出「快照会把 `.env.local` 烤进 zip」与「两个包的清单同名 → 只核到半个包却显示绿灯」
-两条静默故障，已修。详见 `NEXT_STEPS.md` §20）。
+两条静默故障，已修。详见 `NEXT_STEPS.md` §20 / §21）。
 
-> ### 音效现状：四个音全部定稿并在站点在用（③ 为用户拍板版）
-> ### ① charge · ② burst · ④ reveal 待用户耳朵最终确认；③ flip 已由用户选定 `s2-50`。
+> ### 音效现状：**四个音全部定稿并在站点在用**（用户已拍板，2026-09-21 第二十九轮：
+> ### 「很好，现在音效很符合我的需求」→ 随后存成 `v2`）。③ flip 为用户选定的 `s2-50`。
+> ### 下面这一段保留为「怎么走到这一步」的证据链，**不是待办**。
 >
 > 用户原话：`charge`「听起来像雷云滚滚」「比较吵」；`burst`「像电饭煲烧开打开的时候」。
 > 实测证实两个音是**同一形状的两个极端**（`scripts/out/charge-spec.log`）：
@@ -188,7 +193,10 @@ tarot-app/
 │   │                              / probe-panel-worst（**逐张遍历 22 张牌**量面板净空，取最坏）
 │   │                              / probe-sfx（音效**结构事实**：ctx 是否真建起来且 running、
 │   │                                 四类节点是否真连上；听不了声音，就验这些）
-│   │                              / probe-sfx-off（反向：从没开过音效的用户不该被建 ctx）
+│   │                              / probe-sound-default（**缺省开** 10 条：缺省开着 / 加载时无 ctx /
+│   │                                 第一次手势起播且走素材路 / 手势不翻开关 / 点关点开 / 图标两态）
+│   │                              / probe-sfx-off（反向：**明确关过**的用户不该被建 ctx。
+│   │                                 必须带 `--seed` 在加载前写 `tarot.sound='off'`）
 │   │                              / probe-ambient（**10 条判据**：mp3 下没下到 / **走的素材路还是
 │   │                                 偷偷退回合成** / MP3 编码器延时有没有被排除在循环外 /
 │   │                                 常驻性 / duck 与恢复 / 关开关真的停。
@@ -243,7 +251,14 @@ tarot-app/
     ├─ audio/                    ⭐ 声音：**BGM 与音效都用 AI 素材**（音效第二十五轮接完），合成路只剩兜底
     │   ├─ engine.js             ⭐ 音频底座：ctx / 总线 / **程序化厅堂混响**（现算 IR）/ 包络与噪声工具。
     │   │                        音效与环境音共用同一个 ctx 与总线 —— 否则开关只关得掉一半。
-    │   │                        三条规矩写在文件头：默认关 / ctx 只在手势里建 / 增益必走包络
+    │   │                        三条规矩写在文件头：**意图默认开** / ctx 只在手势里建 / 增益必走包络
+    │   │                        （另：`peekAudioContext()` 是**只读**的 —— 查一眼不该顺手建出 ctx）
+    │   ├─ autostart.js          ⭐ 第三十一轮新增：「默认开」的**兑现**。
+    │   │                        监听第一次 pointerdown / keydown / click → unlock + 起 BGM + 解静音。
+    │   │                        用户明确关过（存了 'off'）就地收摊；手势落在喇叭上则让给喇叭处理。
+    │   │                        ⚠️ 为什么必须单独有它：把缺省值改成 true **只是意图**，
+    │   │                        浏览器不允许在非手势里启动 AudioContext → 没有它就没有声音，
+    │   │                        而且全程不报错。`__tarotSound` 只读暴露 armed/pref/engineOn/ctxState
     │   ├─ sfx.js                ⭐ 四个音：**素材优先、合成兜底**（第二十五轮接完）。
     │   │                        素材 `assets/audio/sfx/{charge,burst,flip,reveal}.mp3`，
     │   │                        由 `scripts/build-sfx.py` 修剪/配平（`scripts/out/_sfx_build.json`）。
@@ -258,7 +273,8 @@ tarot-app/
     │                            素材走 `assets/audio/ambient-loop.mp3`（60s 无缝循环）；
     │                            失败（`file://` 的 CORS / 缺文件 / 解码失败）才退回合成那版
     │                            （双失谐 drone + 风 + 稀疏点缀，**永不重复**，是「循环听腻了」的备选）。
-    │                            礼仪三条：抽牌时 duck 到 35%、切后台静音、默认关且淡入 3.5s。
+    │                            礼仪三条：抽牌时 duck 到 35%、切后台静音、淡入 3.5s；
+    │                            **缺省开**（第三十一轮），起播由第一次用户手势兑现。
     │                            ⚠️ drone 是常驻振荡器，**不能**用 sfx 那种一次性包络节点搭
     ├─ assets/fonts/             ⭐ 标题专用字体子集（合计 **10.0 KB**）：
     │                            `title-latin.woff2`  Cinzel 可变字重 400..900  `TAROT·`        1.82 KB
@@ -284,7 +300,8 @@ tarot-app/
     └─ components/               App / HeroStage / EnvelopeWelcome / MistLayer / ParticleField
                                  / CrystalOrb / CardReveal / CardFace / SmartImage
                                  / CardGallery（用户可开的「牌之图鉴」）/ CardDetail（完整解读覆盖层）
-                                 / WhisperTags（两侧漂浮低语）/ SoundToggle（音效开关，左上角）
+                                 / WhisperTags（两侧漂浮低语）
+                                 / SoundToggle（声音开关：**喇叭图标**，左上角、品牌下方；第三十一轮）
                                  / ReadingPanel / ShareDialog / DevBar
 ```
 
@@ -703,7 +720,8 @@ PY="C:/Users/29923/.workbuddy/binaries/python/envs/default/Scripts/python.exe"
 "$N" scripts/run-flows.mjs probe-whispers probe-gallery --w 1582 --h 804
 "$N" scripts/run-flows.mjs probe-whispers --w 504 --h 784   # 窄屏：低语整层应 display:none
 "$N" scripts/run-flows.mjs probe-panel-worst --reduced      # 逐张遍历 22 张，取最坏净空
-"$N" scripts/run-flows.mjs probe-sfx probe-sfx-off           # 音效：开了会响 / 没开不建 ctx
+"$N" scripts/run-flows.mjs probe-sfx probe-sfx-off --seed "localStorage.setItem('tarot.sound','off')"
+"$N" scripts/run-flows.mjs probe-sound-default                # 缺省开 + 第一次手势起播 + 喇叭图标两态
 "$N" scripts/run-flows.mjs probe-ambient                     # 环境音：起来 / 常驻 / duck / 关得掉
 "$N" scripts/verify-orb3d.mjs                  # 3D 球四用例
 
@@ -1547,7 +1565,8 @@ APP_URL=http://127.0.0.1:4199/ "$N" scripts/run-flows.mjs audit-title audit-draw
     合成音「廉价」往往不是音色问题，是**没有空间**。
   - **② 环境音**（新增 `src/audio/ambient.js`）：双失谐 drone（0.4Hz 拍频，**刻意不写和弦进行**，
     一有进行就变成「一首曲子」会抢戏）+ 风（低通截止被 0.035Hz LFO 推，28.6 秒一个周期 = 声音自己在呼吸）
-    + 每 14–30 秒一声稀疏点缀 + 整条总线走混响。礼仪三条：抽牌时 duck 到 35%、切后台静音、默认关且淡入 3.5s。
+    + 每 14–30 秒一声稀疏点缀 + 整条总线走混响。礼仪三条：抽牌时 duck 到 35%、切后台静音、淡入 3.5s
+    （「缺省开」是第三十一轮改的，见下文该轮；起播时刻由第一次用户手势决定，见 `audio/autostart.js`）。
     ⚠️ drone **不能**用 `tone()` 那种一次性包络节点搭（会 0.15s 自己停），正解是自己建 `osc → 固定增益 → mix`。
   - **③ 几何：只挪卡牌是没用的（重要）** —— 标题带是从卡牌顶边**往上锚定**的，
     只把牌往下挪，标题带跟着一起挪，副标题与牌面之间的间距纹丝不动。
@@ -1904,3 +1923,71 @@ APP_URL=http://127.0.0.1:4199/ "$N" scripts/run-flows.mjs audit-title audit-draw
   `os.startfile(lnk)` 端到端把服务拉起来并打开浏览器成功。
 - **注意**：由助手进程启动的服务会被环境的进程回收清掉（会话结束即消失），
   这与用户自己双击无关 —— 用户双击是由 explorer 发起的独立进程。
+
+### 第三十一轮 · 声音默认开 + 开关改成喇叭图标（2026-09-21）
+
+用户：「这个给用户使用的版本还需要修改一下，默认要打开音乐，音乐控制开关改成一个喇叭符合（符号）」。
+
+**① 默认开 —— 但「默认开」不等于「一打开就出声」**
+
+改之前：意图缺省是静音（`readSoundPref()` 读 `=== 'on'`），用户在页面里必须自己找到开关。
+改之后：
+- `engine.readSoundPref()` 判据翻成 **`!== 'off'`** —— 只有用户**明确关过**才算关。
+  ⚠️ 写成 `=== 'on'` 会把「从没表过态」算成静音，默认开被静默吃掉，
+  而这种错**没有症状**（页面就是安静，和以前一模一样），只能靠注释与探针守住。
+- `let enabled = readSoundPref()`：模块初始化就定下，**不写死 false**。
+  写死的话「默认开」在**点水晶球**这条路径上会失效（`handleDraw` 用 `isSoundOn()` 当门），
+  而页面正常、控制台干净，只是没声音。
+- 新增 **`src/audio/autostart.js`**：监听**第一次** `pointerdown` / `keydown` / `click`
+  → `unlock()` + `unmuteAll()` + `startAmbient()`，成功后卸载监听。
+  浏览器不允许在非手势里启动 `AudioContext`，所以「默认开」这件事**只能**由第一次操作兑现。
+  三条边界：① 用户明确关过（`'off'`）→ 就地收摊，绝不自作主张顶开他的决定；
+  ② 手势落在喇叭自己身上 → 让给喇叭（不然「第一次点的就是开关想关掉」会先起一遍再关）；
+  ③ 只有 `unlock()` 返回真（ctx 确实 running）才收工，否则留着等下一次手势 ——
+  比「以为开好了其实一直哑着」诚实。三种事件都要听：**读屏软件「激活」只派发 click，没有 pointerdown**。
+- 新增只读探针口 `peekAudioContext()`。为什么不能拿 `audio()` 去查状态：
+  它是「拿到（必要时创建）」—— 查一眼就会在非手势里造出一个 suspended 的 ctx，
+  把「默认开但尚未出声」这个可测事实自己破坏掉。
+- `__tarotSound`（与 `__tarotSfx` 同一套路）只读暴露 `armed / pref / engineOn / ctxState`。
+
+**② 开关收成喇叭**：`.sound` 从「圆点 + 声音开/关」的胶囊改成 **32px 正圆 + 喇叭图标**
+（开 = 喇叭 + 两道路径声波，关 = 喇叭 + 叉；`stroke` 描边，与碑铭线/低语框同一族细线）。
+- 为什么：这是个**状态控件**，不是一句话 —— 声波/叉是跨语言符号，
+  「声音开」三个字在 11px 下要读一遍才知道当前是哪个状态；且去掉文字后横向占用少一半。
+- 代价：**必须补无障碍名字** → `aria-label="声音"`（图标本身 `aria-hidden`，不给读屏念两遍），
+  状态仍由 `aria-pressed` 报。
+- 开的时候只有那两道声波在**呼吸**（2.6s，外圈延后 0.35s；本体不动 —— 整块动会读成 spinner），
+  `prefers-reduced-motion` 下关掉。
+- 尺寸从「靠文字撑开」变成写死，位置（left 28 / top 74，窄屏 68）**没动**：
+  实测 `toggleRect = {x:28, y:74, w:32, h:32}`，`elementFromPoint` 命中是自己，
+  与解读面板不重叠，点球仍然打在球上（`orbHittable === 'orb'`）。
+  逐条量过 10 条低语：最近的一条在 x=70.4（按钮右边缘 60，横向错开），无重叠。
+
+**③ 探针跟着改口径**（这是本轮工作量的大头 —— 旧断言的前提消失了）：
+- 新增 `scripts/flows/probe-sound-default.js`（10 条判据）：缺省开 / **加载时没有 ctx**（把口径写死，
+  免得以后有人为了「默认开」去非手势里建 ctx）/ 第一次手势之后 ctx 恰好 1 个且 running、
+  **环境音真的接上**（60.048s 素材循环源，不是只建了个空图）/ 这次手势不许把开关翻掉 /
+  第二次手势不重复起播 / 点关（pref=off、声波消失、源被停）/ 再点开（pref=on、声波回来、新起 1 个源）。
+- `probe-sfx.js`：`PASS_initOff` → `PASS_initOn`（判据是「不是 off」而不是「等于 on」——
+  缺省开**不写存储**，写成 `=== 'on'` 会在首次访问这个主场景下假红）；
+  第一次手势从 `btn.click()` 改成 `document.body.click()`（缺省开着，点开关等于把它关掉）；
+  另加 `PASS_iconSwitches`（关掉后声波路径必须消失、图标仍在）。
+- `probe-ambient.js`：起播手势同上改成点空白处。
+- `probe-sfx-off.js`：口径从「从没点过开关的用户」改成「**用户明确关过**」，
+  用 `--seed "localStorage.setItem('tarot.sound','off')"` 在页面加载**之前**造出前提
+  （加载后再写没用：`enabled` 是模块初始化读一次定下的）。
+- `scripts/run-flows.mjs`：补上 `--seed` 等**带值开关**的透传 ——
+  漏一个的后果不是「参数无效」，而是那个值被当成**下一个 flow 名字**去拼路径。
+
+**验收（生产构建 `dist/` 实测）**：
+`probe-sound-default` 10/10 · `probe-ambient` 9/9 · `probe-sfx` 17/17 · `probe-sfx-off` 6/6 全 `ALL_PASS`；
+四个音效的实测统计**一个字节没动**（flip 0.522s / -18.0dB、charge 1.045s、burst 1.515s、reveal 4.049s）；
+产物里 `声音开` / `声音关` / `sound__dot` / `sound__label` 零命中，`devbar` 仍被摇掉。
+截图核对：桌面 32px、手机（CDP 真机视口 390×844）30px，开/关两态形状都清晰。
+- **一处判据自己写错过并修正**：`PASS_toggleOff` 第一版把「开关这一刻之前创建过的所有源」
+  当成「活着的源」（实测 `stops=1 < liveSources=5` 假红）——
+  音效是一次性 BufferSource，播完自己结束，`sfx.playAsset()` **从不调 `stop()`**。
+  改成按第一次手势那一刻量到的**增量**算（素材路 = 0 振荡器 + 1 循环源），与 `probe-ambient` 的 onDelta 同口径。
+- **顺手修的两处文档漂移**：`App.jsx` 里 `SoundToggle` 上方写着「放右下角」（实现一直是左上角）；
+  顶部「音效现状」还写着「① charge · ② burst · ④ reveal **待用户耳朵最终确认**」，
+  而用户在第二十九轮已经说了「现在音效很符合我的需求」→ 改成「四个音全部定稿」，并注明下面那段是证据链不是待办。

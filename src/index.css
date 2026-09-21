@@ -893,8 +893,9 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-/* ============================ 音效开关 ============================
-   2026-09-20 第二十二轮。**为什么不在顶栏、也不在右下角**：
+/* ============================ 声音开关（喇叭） ============================
+   2026-09-20 第二十二轮建；2026-09-21 第三十一轮由「圆点 + 声音开/关」改成喇叭图标。
+   **为什么不在顶栏、也不在右下角**：
 
    · 不进顶栏：顶栏右侧每多一个元素，那组的左边缘就往中间推一点；而标题居中、
      又和顶栏同处一条 y 带（视口一矮必然重叠），可用横向空档就是标题字号的上限
@@ -905,7 +906,12 @@ body {
    最终放在**品牌下方、左上角**：与顶栏同一个 28px 左边距（视觉上属于顶栏这一族），
    而 y=74 在顶栏内容（22–45）之下、两侧低语（最低一条 y=19% ≈ 134px，
    见 skin.js 的 WHISPERS.layout）之上 —— 三个都不碰，且永远不在面板的覆盖范围里。
-   窄屏低语整层隐藏，这个位置更空。 */
+   窄屏低语整层隐藏，这个位置更空。
+
+   第三十一轮改成图标后的尺寸：32px 正圆（原来是靠文字撑开的胶囊）。
+   ⚠️ 收起文字后**没有了可读的文案**，所以无障碍名字必须回到 JSX 上（`aria-label`）；
+   样式这边只负责形状与状态色。32px 下沿到 y=106，离低语的 134px 还有 28px 余量，
+   原来那条「不碰低语」的结论不变。 */
 .sound {
   position: fixed;
   left: 28px;
@@ -913,15 +919,14 @@ body {
   z-index: 35;
   display: flex;
   align-items: center;
-  gap: 7px;
-  font-family: var(--font-body);
-  font-size: 11px;
-  letter-spacing: 0.18em;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
   color: var(--text-faint);
   background: rgba(10, 7, 20, 0.42);
   border: 1px solid var(--line);
-  border-radius: 999px;
-  padding: 5px 12px 5px 10px;
+  border-radius: 50%;
   cursor: pointer;
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
@@ -934,33 +939,57 @@ body {
   border-color: rgba(201, 180, 255, 0.42);
 }
 
-/* 开的时候给一点暖色 —— 只用文字「开/关」在这么小的字号下不够显眼 */
+/* 开的时候给一点暖色 —— 只用形状在这么小的尺寸下不够显眼 */
 .sound[data-on='true'] {
   color: var(--gold);
   border-color: rgba(214, 186, 122, 0.4);
 }
 
-.sound__dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: currentColor;
-  opacity: 0.35;
-  transition: opacity 0.25s, box-shadow 0.25s;
+.sound__icon {
+  display: block;
+  width: 18px;
+  height: 18px;
 }
 
-.sound[data-on='true'] .sound__dot {
-  opacity: 1;
-  box-shadow: 0 0 8px currentColor;
+/* 「在响」的暗示：只有**开着**的时候、而且只有那两道声波在呼吸。
+   整个图标一起动会读成「加载中」（那是 spinner 的语义），所以本体不动。
+   周期 2.6s 刻意慢于心跳（约 1s）—— 这是环境音，不该有节拍感。
+   外圈延后 0.35s，内圈先亮外圈后亮，看起来像波在往外走。 */
+.sound[data-on='true'] .sound__wave {
+  animation: sound-breathe 2.6s ease-in-out infinite;
+}
+
+.sound[data-on='true'] .sound__wave--outer {
+  animation-delay: 0.35s;
+}
+
+@keyframes sound-breathe {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sound[data-on='true'] .sound__wave {
+    animation: none;
+  }
 }
 
 @media (max-width: 640px) {
   /* 窄屏顶栏的 28px 左右内边距没有覆盖，这里也别动 left —— 保持与品牌同一条竖线 */
   .sound {
     top: 68px;
-    padding: 4px 10px;
-    font-size: 10px;
-    gap: 5px;
+    width: 30px;
+    height: 30px;
+  }
+
+  .sound__icon {
+    width: 16px;
+    height: 16px;
   }
 }
 

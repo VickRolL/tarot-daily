@@ -18,6 +18,7 @@ import SoundToggle from './components/SoundToggle'
 import EnvelopeWelcome from './components/EnvelopeWelcome'
 import * as sfx from './audio/sfx'
 import * as ambient from './audio/ambient'
+import { armSoundAutostart } from './audio/autostart'
 
 const todayLabel = (() => {
   const d = new Date()
@@ -96,6 +97,17 @@ export default function App() {
   const pushTimer = (fn, ms) => {
     timers.current.push(setTimeout(fn, ms))
   }
+
+  /**
+   * 声音的缺省是「开」（第三十一轮），但浏览器不允许在非手势里启动 AudioContext ——
+   * 所以「默认开」要靠**用户的第一次操作**兑现：装上之后，第一次 pointerdown /
+   * keydown / click 会把引擎叫醒、把环境音淡入（详见 `audio/autostart.js`）。
+   *
+   * 放在 App 而不是 SoundToggle 里：它管的是**整页的声音策略**，
+   * 那个喇叭按钮只是这条策略的一个显式入口。用户明确关过（存了 'off'）时，
+   * 这个监听会自己收摊，绝不会把用户的「关」顶掉。
+   */
+  useEffect(() => armSoundAutostart(), [])
 
   /**
    * 场景自身的入场与信封**并行**跑，不是串在它后面：
@@ -265,8 +277,9 @@ export default function App() {
         </span>
       </header>
 
-      {/* 音效开关：放右下角，**不进顶栏** —— 顶栏右侧每多一个字符，
-          居中标题的可用横向空档就少一截（标题与顶栏同处一条 y 带）。 */}
+      {/* 声音开关（第三十一轮起是个喇叭图标）：固定在左上角、品牌下方，
+          **不进顶栏** —— 顶栏右侧每多一个字符，居中标题的可用横向空档就少一截。
+          （这行注释以前写的是「放右下角」，与实现不符，已改。） */}
       <SoundToggle />
 
       <motion.section

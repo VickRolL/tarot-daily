@@ -16,7 +16,9 @@
      ② 点一个音 → 该音走 **asset**（证明预载真的赶在播放之前完成）
      ③ 切「合成」再点 → 该音走 **synth**（证明 A/B 钩子真的接通，不是摆设）
      ④ 连播四拍 → 四个音都响了、且都走素材路
-     ⑤ 顺手开声音：`.sound` 开关同步成「开」（两个控件不许说两套话）
+     ⑤ 顺手开声音：`.sound` 开关同步成「开」（两个控件不许说两套话）。
+        ⚠️ 判据是**生效状态**（`aria-pressed` + `__tarotSound.engineOn` + 存储不是 'off'），
+        不是「存储里写着 'on'」—— 缺省开时 DevBar 有意不写存储，后者会假红。
      ⑥ 调试条没盖住水晶球，也没盖住解读面板的「再抽一次」
         （这条是这个项目踩过的真事故：横排调试条曾把「再抽一次」压到点不到）
      ⑦ 调试条自己不超出视口
@@ -119,10 +121,24 @@ out.PASS_assetPath = out.kindCharge === 'asset'
 /* 预载必须真的到齐 —— 否则上面那条即使绿了也是「碰巧第一次就解码完」 */
 out.PASS_preloaded = (out.sfxState?.loaded?.length ?? 0) === 4
 
-/* ── ⑤ 顺手开声音：左上角开关必须同步 ────────────────────────────── */
+/* ── ⑤ 顺手开声音：左上角开关必须同步 ──────────────────────────────
+   ⚠️ 判据不能用「存储里写着 'on'」当代理量（第三十一轮改口径）：
+   缺省就是开，而 `DevBar` 里那句写的是 `if (!sfx.isSoundOn()) sfx.setSoundOn(true)`
+   —— 已经开着的时候它**有意不写存储**，于是 `pref` 是 `null`。
+   那一条判据会变成假红（实测过：`pressed:"true"` 而 `pref:null`）。
+   要判的是**生效状态**而不是存储的写法：开关显示开 + 引擎标志位为真 + 存储里不是 'off'。
+   （真正的分歧场景是「用户明确关过、再点音效」——那时 `isSoundOn()` 为假，
+      `setSoundOn(true)` 会把 'on' 写进去，下面第三条仍然守得住。） */
 out.soundToggle = (() => {
   const b = $('.sound')
-  return b ? { pressed: b.getAttribute('aria-pressed'), label: b.textContent.trim() } : null
+  return b
+    ? {
+        pressed: b.getAttribute('aria-pressed'),
+        ariaLabel: b.getAttribute('aria-label'),
+        waves: b.querySelectorAll('.sound__wave').length,
+        engineOn: window.__tarotSound?.engineOn ?? null
+      }
+    : null
 })()
 out.soundPref = (() => {
   try {
@@ -131,7 +147,11 @@ out.soundPref = (() => {
     return `${e.name}: ${e.message}`
   }
 })()
-out.PASS_soundSynced = out.soundToggle?.pressed === 'true' && out.soundPref === 'on'
+out.PASS_soundSynced =
+  out.soundToggle?.pressed === 'true' &&
+  out.soundToggle?.waves === 2 &&
+  out.soundToggle?.engineOn === true &&
+  out.soundPref !== 'off'
 
 /* ── ③ A/B：切到合成，同一个音必须换路 ───────────────────────────── */
 barBtn('合成')?.click()
