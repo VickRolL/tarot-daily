@@ -291,13 +291,16 @@ PY="C:/Users/29923/.workbuddy/binaries/python/envs/default/Scripts/python.exe"
 
 # git / 快照（2026-09-19 起）
 git log --oneline                        # bb0ad52 = v1 基线
-git tag -l                               # v1 / v2 —— v2 = 四个音效全部定稿那一版
+git tag -l                               # v1 / v2 / v3 —— v2 = 四个音效定稿那一版；v3 = 面向用户版
+                                         # （声音默认开 + 喇叭开关、每张牌 3~5 条今日建议）
+git ls-remote origin                     # 远端真实状态：main / v1 / v2 / v3
+                                         # ⚠️ 本机 `git branch -vv` 恒显示 [origin/main: gone]，那是环境丢引用，不是没推
 
 # 校验快照 zip 解出来的目录是否完好（**两个包各核一次**）
 node scripts/verify_manifest.mjs <目录>                                  # 代码包
 node scripts/verify_manifest.mjs <目录> --manifest MANIFEST-art.sha256   # 素材包
-# 冻结 / 演练（v3 定稿后照这个来）
-"$PY" scripts/preflight_freeze_secrets.py                                # 先查密钥会不会被卷进包
+# 冻结 / 演练（要给 v3 补快照时照这个来；v1 / v2 已有，v3 尚未做）
+"$PY" scripts/preflight_freeze_secrets.py                                # ⚠️ 先查密钥会不会被卷进包（顺序不能反）
 "$PY" scripts/freeze_snapshot.py --label v3 --date <日期>
 "$PY" scripts/verify_snapshot_restore.py --label v3 --date <日期>         # 换全新路径解出来真跑一遍
 
