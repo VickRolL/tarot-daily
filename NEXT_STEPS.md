@@ -2608,3 +2608,104 @@ og 三处是绝对地址 / 抽牌后卡牌出现且插画 `naturalWidth>0`（隐
 3. 手机真机跨天解锁验证（一直挂着）。
 4. `.env.local` 里现在有两条密钥（ElevenLabs + Netlify）—— 文件在 `.gitignore` 内，不会入库；
    用户若想撤权，到 Netlify 的 Personal access tokens 页面删掉即可（不影响已部署站点）。
+
+---
+
+## 28 · 把上线情况同步到 GitHub（仓库层面）
+
+第三十七轮补的。**代码早就推上去了，但仓库本身看不出这个站点已经上线**：
+README 里地址藏在「变更日志」段落要滚很久、仓库描述还停在 v2 时代（「v2 正在做真 3D 水晶球改造」，
+而 3D 早就做完并上线了）、`homepage` 是空的、镜像上没有任何 Release。
+
+**五个位置，改完 GitHub 上就是一副完整的「已上线」面貌：**
+
+| # | 位置（GitHub 页面上的样子） | 做法 |
+|---|---|---|
+| 1 | 仓库首页第一屏 | README 顶部加一行线上地址 |
+| 2 | About 右侧的 **Website** 链接 | `gh repo edit --homepage` |
+| 3 | About 的仓库描述 | `gh repo edit --description` |
+| 4 | 描述下方的话题胶囊 | `gh repo edit --add-topic …` |
+| 5 | 侧边栏 **Releases** | 打带注释的标签 `v4` + `gh release create` |
+
+> 2/3/4/5 都是**仓库元信息，不动代码** —— 所以它们不进提交历史，
+> 「同步了没有」只能去 GitHub 页面上看，别指望 `git log` 能反映。
+
+### 28.1 命令（换域名或补记时照着改）
+
+```bash
+# 2/3/4 一次做完（gh 需 repo scope，已登录 VickRolL）
+gh repo edit VickRolL/tarot-daily \
+  --homepage "https://tarotdaily.netlify.app" \
+  --description "每日塔罗一签 · 静态站点（…）。已上线 → https://tarotdaily.netlify.app" \
+  --add-topic tarot --add-topic react --add-topic vite --add-topic tailwindcss \
+  --add-topic framer-motion --add-topic threejs --add-topic static-site --add-topic netlify
+
+# 5 标签 + Release（标签用带注释的，与 v1~v3 体例一致：标题行 + bullet 详述）
+git tag -a v4 -F scripts/out/_tagmsg-v4.txt
+GIT_TERMINAL_PROMPT=0 git push origin main --follow-tags     # ← 必须带 GIT_TERMINAL_PROMPT=0，见 §6 第 45 条
+gh release create v4 --repo VickRolL/tarot-daily \
+  --title "v4 · 首次长期上线（https://tarotdaily.netlify.app）" \
+  --notes-file scripts/out/_release-v4.md --latest
+```
+
+**标签内容写哪儿**：`_tagmsg-v4.txt` / `_release-v4.md` 都放在 `scripts/out/`（已被忽略），
+用 `-F` 从**文件**读 —— 内容里有反引号，走 shell 内联字符串会被命令替换吃掉（见 §6 第 44 条）。
+
+### 28.2 Deployment 记录 —— GitHub 原生的「部署情况」展示位
+
+`homepage` 只说明「有这个站」，**Deployments 区块才表达「谁在什么时候部署了哪个 ref」**。
+本仓库此前是 0 条。管理员可以在仓库侧边栏看到一个 `production` 环境并可点进线上站：
+
+```bash
+# 1) 建部署记录（required_contexts 必须显式给空数组，否则平台要求分支保护上有检查项 → 422）
+cat > scripts/out/_deployment-v4.json <<'JSON'
+{ "ref": "<commit-sha>", "environment": "production",
+  "description": "Netlify 手工部署（netlify-cli 上传 dist/，未接 Git）· v4 · 线上验证 42/42 + 23/23",
+  "required_contexts": [], "auto_merge": false,
+  "transient_environment": false, "production_environment": true }
+JSON
+
+# 2) 补状态；environment_url 决定侧边栏那条能不能点进线上站
+cat > scripts/out/_deployment-status-v4.json <<'JSON'
+{ "state": "success", "environment_url": "https://tarotdaily.netlify.app",
+  "log_url": "https://github.com/VickRolL/tarot-daily/releases/tag/v4",
+  "description": "线上验证通过：静态 42/42 逐字节一致 + 真浏览器 23/23" }
+JSON
+
+gh api repos/VickRolL/tarot-daily/deployments --input scripts/out/_deployment-v4.json --jq .id
+gh api repos/VickRolL/tarot-daily/deployments/<上一步返回的 id>/statuses \
+  --input scripts/out/_deployment-status-v4.json
+gh api repos/VickRolL/tarot-daily/environments --jq '[.environments[].name]'   # 应出现 production
+```
+
+**如实标注**：`description` 里写明是「手工部署、未接 Git」。
+这不是自动化跑出来的记录，写成全自动的会**误导以后翻提交历史的自己**。
+
+> 接上 Git 之后（§26.5 B）就不需要手工补了 —— Netlify 会自己往 commit 写
+> status / deployment，这些记录才是真正自动产生的。
+
+### 28.3 标签与「打完标签又提交」的关系
+
+标签 `v4` 打在 **`baf9c4f`**（README 首屏那笔）。**§28 这段文档是之后才提交的**，
+所以它不在 v4 里 —— 这是**故意的**，不动标签：
+
+- 标签标记的是「**上线那一刻的代码**」，README 首屏是上线交付物的一部分，该在标签里；
+- 纯粹的文档补记往后排，不必为它挪标签（挪标签要 `-f` 强推，会破坏「标签不可变」的约定，
+  参见 `project-freeze-snapshot` 技能里「打完标签不要再提交」那条的同一道理）。
+
+**判据**：`git ls-remote origin` 里 `refs/tags/v4^{}` 应等于 `baf9c4f`；
+`refs/heads/main` 会继续往前走，两者不相等是**正常**的。
+
+### 28.4 本轮核验（都是真查，不是推断）
+
+```
+远端 main            = baf9c4f  ✓（= 本地 HEAD）
+远端 refs/tags/v4^{}  = baf9c4f  ✓
+homepageUrl          = https://tarotdaily.netlify.app  ✓
+repositoryTopics     = 8 个（framer-motion / netlify / react / static-site /
+                       tailwindcss / tarot / threejs / vite）✓
+Release              = v4（Latest）✓
+environments         = ["production"]  ✓
+线上站点             = 200 / 3022 B（与 dist/index.html 一致）✓
+```
+

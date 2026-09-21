@@ -5,7 +5,16 @@
 > 未完成的工作看 **`NEXT_STEPS.md`**（含具体做法、优先级、成本与踩坑提醒）。
 > 每次有实质进展都要回来更新本文档的「当前阶段」与「变更日志」。
 
-最后更新：2026-09-22（第三十六轮：**Netlify 上线** —— 用户版第一次有了长期地址
+最后更新：2026-09-22（第三十七轮：**把「已上线」同步到 GitHub 仓库层面** —— 代码早推上去了，
+但仓库本身看不出站点已上线：仓库描述还停在 v2 时代、`homepage` 空的、没有任何 Release。
+本轮补五处**仓库元信息**（不动代码）：README 首屏加线上地址、About 的 `homepage` 指向
+**https://tarotdaily.netlify.app**、描述更新、8 个话题标签、附注标签 **`v4`** +
+**GitHub Release v4**（Latest）。另补了一条 **`production` 环境 Deployment 记录**并挂上
+`environment_url`，让仓库侧边栏的 Deployments 能点进线上站。做法与命令见 `NEXT_STEPS.md` §28）
+⚠️ 上面 5 处**都在仓库元信息里、不进提交历史** —— 「同步了没有」只能在 GitHub 页面上看，
+`git log` 反映不出来。标签 `v4` 打在 `baf9c4f`（README 首屏那笔），§28 文档是**之后**才提交的，
+所以它**不在 v4 里**，这是故意的（标签标记「上线那一刻的代码」，不挪）。
+上一轮第三十六轮：**Netlify 上线** —— 用户版第一次有了长期地址
 **https://tarotdaily.netlify.app**；`og:image` / `og:url` / `twitter:image` **三处相对路径已改成绝对地址**
 （另加 `canonical`）。线上两层验证：逐文件哈希 **42/42**、真浏览器探针 **23/23** 全绿。详见 `NEXT_STEPS.md` §27）
 ⚠️ **当前是「手工部署」站点**（netlify-cli 上传本地 `dist/`），**未接 Git** → 改代码 `git push`
@@ -718,6 +727,9 @@ WebP 压缩后（牌面按实际显示 2 倍图 768×1123）：
    ② 若想换更好记的域名，改 `index.html` 的 og 三处 + canonical 再重新部署。
    > EdgeOne 那条线保留，当「随时可分享的临时演示」用（预览链接 3 小时，重新部署即续期）。
    > ⚠️ CloudBase 默认域名**不能**当对外地址：会弹「访问提示中间页」，官方禁止正式分发。
+   > **仓库层面也已同步（第三十七轮「已上线」这件事在 GitHub 上的可见性）**：README 首屏地址、
+   > About 的 `homepage` / 描述 / 8 个话题、标签 `v4` + Release v4、`production` Deployment 记录。
+   > ⚠️ 这几处**都在仓库元信息里、不进提交历史**，`git log` 看不出来 —— 见 `NEXT_STEPS.md` §28。
 2. 本地日历回看页（需求里列为「后续可加」，抽牌记录已在 `localStorage`）
 3. 移动端专门出 9:16 竖构图主视觉（**不紧急**，实测竖屏构图已成立）
 4. 可选：`hero-figure` 人物层（做背景/人物/球的三层视差，纯锦上添花）
@@ -2293,3 +2305,25 @@ EdgeOne 官方文档写明：通过「项目域名」与「部署域名」访问
 ⚠️ 域名已写进 `index.html` 的 og 三处与 canonical，**改名要一起改并重新部署**。
 
 详见 `NEXT_STEPS.md` §27。
+
+- **2026-09-22（第三十七轮 · 把「已上线」同步到 GitHub 仓库层面）**
+  - **问题**：代码早推上去了（`70a2b63`），但**仓库本身看不出站点已经上线** ——
+    仓库描述还停在 v2 时代（「v2 正在做真 3D 水晶球改造」，而 3D 早在 v2 就做完并上线了）、
+    `homepage` 是空的、README 里地址藏在「变更日志」段落要滚很久、镜面上一条 Release 也没有。
+  - **补五处仓库元信息（不动代码）**：README 首屏加线上地址入口；`gh repo edit` 设
+    `homepage` = `https://tarotdaily.netlify.app`、换掉过时描述、加 8 个话题标签；
+    打附注标签 **`v4`**（体例与 v1~v3 一致：标题行 + bullet 详述）+ 建 **GitHub Release v4**（Latest）。
+  - **另补一条 Deployment 记录**：`gh api .../deployments` 建 `production` 环境记录
+    （`required_contexts` 必须**显式给空数组**，否则被分支保护上的检查项卡 422），
+    再补一条 status 挂上 `environment_url` —— 这样仓库侧边栏的 **Deployments** 区块能直接点进线上站。
+    `description` 里**如实写明是手工部署、未接 Git**，不假装是自动化跑出来的。
+  - ⚠️ 这 5 处**都在仓库元信息里、不进提交历史** ——「同步了没有」只能在 GitHub 页面上看，
+    `git log` 反映不出来（下次接手时最容易误判成「没做」）。
+  - **标签与后续提交的关系**：`v4` 打在 `baf9c4f`（README 首屏那笔 = 上线交付物的一部分），
+    而 §28 文档是**之后**才提交的、**不在 v4 里** —— 这是故意的，**不挪标签**
+    （挪标签要 `-f` 强推，会破坏「标签不可变」的约定，同 `project-freeze-snapshot` 技能里
+    「打完标签不要再提交」那条的同一道理）。判据：`refs/tags/v4^{}` = `baf9c4f`，
+    而 `refs/heads/main` 会继续前走，**两者不相等是正常的**。
+  - 本轮核验（真查非推断）：远端 `main` = `baf9c4f`、`v4^{}` = `baf9c4f`、`homepageUrl` 已设、
+    8 个话题、Release v4（Latest）、`environments` = `["production"]`、
+    线上站点 `200` / 3022 B（与 `dist/index.html` 一致）。详见 `NEXT_STEPS.md` §28。
