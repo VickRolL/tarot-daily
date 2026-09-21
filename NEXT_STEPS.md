@@ -2388,3 +2388,101 @@ CloudBase 的默认域名 `*.tcloudbaseapp.com` 会弹一道**「访问提示中
 本轮做 `eo_time` 语义分析时同时跑了「裸域名」与「带 token」两种请求，**两种都返回 401** ——
 如果拿它当判据，会得出「链接已失效」这个**完全错误**的结论。
 **只有真浏览器（`shot.mjs`）能判**，这条已经踩过两次，不要再踩第三次。
+
+---
+
+## 26 · 2026-09-22 第三十五轮续：换平台方案（Vercel / Cloudflare Pages / Netlify）
+
+用户在「买域名 + 备案 / 换平台 / 维持现状」三条路中选了**换平台**，随后又建议把 **Netlify** 一并考虑。
+这条路**我做不了代办**（要用户本人登录并授权 GitHub），所以本节是**给用户照着做的步骤**，
+外加**已做的准备**与**拿到域名后我能立刻做的那部分**。
+
+### 26.1 前置条件：代码必须先推到 GitHub（本轮已在本地完成）
+
+平台的构建源是 GitHub 仓库，**不推就会构建出一个旧版本**。
+本轮已把 R34 / R35 的提交推到 `origin/main`（此前远端停在 `v3` = R32）。
+
+⚠️ 别忽略这一步：不推就直接 deploy，线上会是 R32 的版本（**没有 favicon、没有声音默认开**）。
+
+### 26.2 三家对比（2026 年免费额度，已按官网/横评核对）
+
+| | **Cloudflare Pages** | **Netlify** | **Vercel** |
+|---|---|---|---|
+| 免费带宽 | **无限**（官方：unlimited bandwidth） | 100 GB/月（新账号已改信用制，见下） | 100 GB/月 |
+| 构建额度 | **500 次/月** | **300 credits/月**（一次生产部署 = 15 credits ≈ 20 次） | 6000 分钟/月 |
+| **超额后果** | **构建排队** —— 站点照常跑 | ⚠️ **全站暂停**，访客看到 "Site not available" | **产生费用** |
+| 商用 | ✅ 允许 | ✅ 允许 | ⚠️ Hobby 版 ToS **不允许商用** |
+| 接 private 仓 | ✅ | ✅ | ✅ |
+| 拖拽部署 | ✅ Direct Upload（**与 Git 集成二选一**） | ✅ **可与 Git 集成并存** | ❌ |
+| CLI（可代做） | ✅ `wrangler pages deploy` | ✅ `netlify deploy` | ✅ `vercel` |
+| 国内可达 | 时通时不通 | 慢 / 不稳（境内无节点） | 时通时不通 |
+
+**结论：长期免费最稳的是 Cloudflare Pages** —— 唯一做到「无限带宽 + 超额只排队、不暂停」的一家，
+三份 2026 年横评都把它排在免费档第一。
+
+**Netlify 的独特优势**：可以先**拖 `dist` 文件夹**上线看效果，**之后再接 Git**（同一站点，不必重建）——
+门槛最低。但要清楚它的信用制风险：**额度耗尽后全站暂停**，这对「发给别人看」是实打实的硬伤。
+
+**Vercel 要留意**：Hobby 免费版 ToS 限「个人非商用」。给 HR 看求职作品集通常不算商用（无商业行为），
+但站上一旦出现接单 / 广告 / 付费就违规了。
+
+> ⚠️ 额度数字以各家官网为准。Netlify 的 credit 制来自 2026 年的第三方核对文章，
+> 也有来源仍按「100 GB + 300 分钟」描述 —— 可能是新旧账号口径不同。
+> **注册后第一件事就是看 Settings 里的 Usage**，别等额度耗尽。
+
+### 26.3 关键构建参数（三家通用）
+
+| 项 | 值 |
+|---|---|
+| Framework preset | **Vite**（Cloudflare 里显示为 "React (Vite)"） |
+| Build command | `npm run build` |
+| Build output directory | `dist` |
+| Root directory | `/`（留空） |
+| Production branch | `main` |
+| Node 版本 | 18 以上（默认即可；若报版本错就设成 20） |
+
+**不要**设 `VITE_DEV_TOOLS` 之类环境变量：`vite.config.js` 里 `__DEV_TOOLS__ = command === 'serve'`，
+平台跑的是 `build`，调试条会被摇掉 —— 这正是「用户版」应有的行为。
+
+### 26.4 步骤 · Cloudflare Pages（推荐）
+
+1. [dash.cloudflare.com](https://dash.cloudflare.com) 注册 / 登录（免费，不要信用卡）
+2. 左侧 **Workers & Pages** → **Create application** → **Pages** → **Import from an existing Git repository**
+3. 授权 GitHub，选仓库 **`VickRolL/tarot-daily`**（private 仓也支持）
+4. **Set up builds and deployments** 填：Build command `npm run build`、Build output directory `dist`
+5. **Save and Deploy** → 得到 `https://tarot-daily.pages.dev`
+
+### 26.5 步骤 · Netlify（最快看到效果）
+
+**A. 拖拽（不接 Git，30 秒）**
+1. [app.netlify.com/drop](https://app.netlify.com/drop) 登录后把 **`dist` 文件夹**（或它的 zip）拖进去
+2. 立刻得到 `https://<随机名>.netlify.app`
+
+**B. 接 Git（自动部署）**
+1. 后台 → **Add new site** → **Import an existing project** → GitHub → 选 `VickRolL/tarot-daily`
+2. Build command `npm run build`、Publish directory `dist` → Deploy
+
+### 26.6 步骤 · Vercel
+
+1. [vercel.com](https://vercel.com) **用 GitHub 账号登录**（省掉一步授权）
+2. **Add New… → Project** → Import Git Repository → 选 `VickRolL/tarot-daily`
+3. Framework Preset 自动识别为 **Vite**，Build / Output 默认就对
+4. **Deploy** → 得到 `https://tarot-daily.vercel.app`
+
+### 26.7 拿到域名后我能立刻做的（把地址发我即可）
+
+1. **改 og 三处**：`index.html` 的 `og:image` / `og:url` / **`twitter:image`** 换成
+   `https://<平台域名>/og-cover.jpg` 与 `https://<平台域名>/`。
+   **在这三个平台上改了是有效的**（与 EdgeOne 预览链接不同：它们不需要 token，抓取端能直接取到）。
+2. 重新构建 + 重新部署，再用真浏览器复验分享卡片（`scripts/shot.mjs`）。
+3. 若平台构建报 Node 版本错，补 `.nvmrc` 或 `package.json` 的 `engines` 锁到 20。
+
+### 26.8 两条必须知道的代价（选这条路时就接受了）
+
+- **国内访问不稳定**：三个平台的默认域名都走境外节点。国内稳定访问**只有备案域名**一条路（§25.3）。
+- **微信分享缩略图可能不稳**：微信抓取端取境外 `og:image` 也可能失败。
+  这条路适合「发链接给朋友 / 贴在非微信场景」；若目标是**给 HR 发微信**，最终还是回到「域名 + 备案」。
+
+### 26.9 EdgeOne 那条线保留
+
+EdgeOne 上的部署**不删**，继续当「随时可分享的临时演示」用（重新部署即续期，§25.2）。两条线并存不冲突。
