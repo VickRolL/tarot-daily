@@ -2534,7 +2534,8 @@ EdgeOne 上的部署**不删**，继续当「随时可分享的临时演示」�
 ### 27.1 结果
 
 - 线上地址：**https://tarotdaily.netlify.app**
-  （站点名 `tarotdaily`，site_id `b6ab3ecc-99c3-43b4-8fb3-9b65e4604bd0`，账号 `lmx13695249572`）
+  （站点名 `tarotdaily`，site_id `b6ab3ecc-99c3-43b4-8fb3-9b65e4604bd0`，
+  账号名里嵌着一段手机号 —— **此处不重复其数字**，见 Netlify 后台）
 - 部署方式：**手工部署**（netlify-cli 把本地 `dist/` 上传），**尚未接 Git**
   → 改代码 `git push` **不会**自动上线，要重跑 §27.2 第 4 步
 - **og 三处已改成绝对地址**（`og:image` / `og:url` / `twitter:image` + 新增 `canonical`），
